@@ -38,6 +38,11 @@ Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2)
 void GeomManager::start()
 {
 	m_pc = GameEngine::getPtrClass();
+	m_pc.lightManager->createPointLight(glm::vec3(10.0f, 5.0f, -10.0f), glm::vec3(1.0f));
+	m_pc.lightManager->createPointLight(glm::vec3(-10.0f, 5.0f, 10.0f), glm::vec3(1.0f));
+	m_pc.lightManager->createPointLight(glm::vec3(-10.0f, 5.0f, -10.0f), glm::vec3(1.0f));
+	m_pc.lightManager->createPointLight(glm::vec3(10.0f, 5.0f, 10.0f), glm::vec3(1.0f));
+
 	m_cam3D = m_pc.cameraManager->getCurrentCamera();
 	m_cam2D = m_pc.cameraManager->createCamera();
 	m_cam2D->setOrtho(true);
