@@ -1,0 +1,53 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+layout(std430, set = 0, binding = 0) buffer nnd 
+{
+	int nb_input_layer;
+	int nb_output_layer;
+	int nb_hiden_layer;
+	int nb_col_hiden_layer;	
+	int activationSize;
+	int weightSize;	
+	int select_sub_best_neural;
+	float mutation_rate;
+	float mutation_multiplayer;
+};
+
+layout(std430, set = 1, binding = 0) buffer nld 
+{
+	int layerId;
+	int size;
+	int seed;
+};
+
+layout(std430, set = 2, binding = 0) buffer nna
+{
+	 float activationBuffer[];
+};
+
+layout(std430, set = 3, binding = 0) buffer nns
+{
+	 float scoreBuffer[];
+};
+
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if (index >= size)
+    {
+        return;
+    }
+
+	uint offsetNNAD_START = index * activationSize;
+    int v1 = activationBuffer[offsetNNAD_START] > 0.5 ? 1 : 0;
+    int v2 = activationBuffer[offsetNNAD_START+1] > 0.5 ? 1 : 0;
+    scoreBuffer[index] += -abs(float(v1 ^ v2) - activationBuffer[index * activationSize + activationSize-1]);
+}

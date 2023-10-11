@@ -1,0 +1,43 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+layout(set = 0,binding = 0,rgb10_a2) uniform image2D inputImage;
+layout(set = 1,binding = 0,rgb10_a2) uniform image2D outImage;
+
+
+layout(std430, set = 2, binding = 0) buffer Size 
+{
+    uint width;
+    uint height;
+};
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if (index >= width * height)
+    {
+        return;
+    }
+
+    ivec2 texCoord = ivec2(index % width, index / width);
+
+    vec4 pixelValue = imageLoad(inputImage, texCoord);
+    
+    ivec2 limitMax = ivec2(width - 1, height - 1);
+    ivec2 limitMin = ivec2(0);
+
+    int dist = int((length(ivec2(width/2, height/2)-texCoord)/max(width,height))*12.0);
+
+    ivec2 uvr = clamp(texCoord+ivec2(dist,dist), limitMin, limitMax);
+    ivec2 uvb = clamp(texCoord-ivec2(dist,dist), limitMin, limitMax);
+    pixelValue.r = imageLoad(inputImage, uvr).r;
+    pixelValue.b = imageLoad(inputImage, uvb).b;
+
+    imageStore(outImage, texCoord, pixelValue);
+}

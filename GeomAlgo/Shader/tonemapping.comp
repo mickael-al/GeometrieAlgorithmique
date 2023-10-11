@@ -1,0 +1,67 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+layout(set = 0,binding = 0,rgb10_a2) uniform image2D inputImage;
+layout(set = 1,binding = 0,rgb10_a2) uniform image2D bloomImage;
+
+layout(std430,set = 2,binding = 0) buffer Size 
+{
+    uint width;
+    uint height;
+};
+
+vec3 ACESFilmicTonemapping(vec3 hdrColor)
+{
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((hdrColor * (a * hdrColor + b)) / (hdrColor * (c * hdrColor + d) + e), 0.0, 1.0);
+}
+
+vec3 reinhardTonemapping(vec3 hdrColor, float exposure)
+{
+    return hdrColor / (hdrColor + vec3(1.0)) * exposure;
+}
+
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+void main() 
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if(index >= width*height)
+    {
+        return;
+    }
+    
+    float bloomIntensity = 0.95;
+
+    ivec2 texCoord = ivec2(index % width, index / width);
+
+    vec4 pixelValue = imageLoad(inputImage, texCoord);
+    
+    vec3 hdrColor = pow(pixelValue.rgb, vec3(1.0 / 2.2));
+    
+    vec3 tonemappedColor = reinhardTonemapping(hdrColor,2.0);
+    
+    vec3 gammaColor = pow(tonemappedColor, vec3(2.2));
+
+    pixelValue = vec4(gammaColor, pixelValue.a);
+
+    if(gammaColor.r > bloomIntensity || gammaColor.g > bloomIntensity || gammaColor.b > bloomIntensity)
+    {
+        imageStore(bloomImage,texCoord,pixelValue);
+    }   
+    else
+    {
+        imageStore(bloomImage,texCoord,vec4(0,0,0,1));
+    }
+
+    imageStore(inputImage, texCoord, pixelValue);
+    
+}

@@ -1,0 +1,50 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+
+layout(set = 0,binding = 0,rgb10_a2) uniform image2D inputImage;
+layout(set = 1,binding = 0,rgb10_a2) uniform image2D blurImage;
+
+layout(std430,set = 2,binding = 0) buffer Size 
+{
+    uint width;
+    uint height;
+};
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+void main() 
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if(index >= width*height)
+    {
+        return;
+    }
+
+    ivec2 texCoord = ivec2(index % width, index / width);
+
+    vec4 pixelValue = imageLoad(inputImage, texCoord);
+    
+    vec3 blurredColor = pixelValue.rgb;
+    ivec2 limitMax = ivec2(width - 1, height - 1);
+    ivec2 limitMin = ivec2(0);
+    for (int i = 1; i < 15; i++)
+    {
+        blurredColor += imageLoad(inputImage, clamp(texCoord - ivec2(i, 0), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(i, 0), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord - ivec2(0, i), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(0, i), limitMin, limitMax)).rgb;
+
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(i, i), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(i, -i), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(-i, i), limitMin, limitMax)).rgb;
+        blurredColor += imageLoad(inputImage, clamp(texCoord + ivec2(-i, -i), limitMin, limitMax)).rgb;
+    }
+
+    blurredColor /=113;
+
+    imageStore(blurImage, texCoord, vec4(blurredColor,pixelValue.a));
+}

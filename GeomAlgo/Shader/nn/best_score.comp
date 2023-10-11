@@ -1,0 +1,72 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+layout(std430, set = 0, binding = 0) buffer nld 
+{
+	int layerId;
+	int size;
+	int seed;
+};
+
+layout(std430, set = 1, binding = 0) buffer nns
+{
+	 float scoreBuffer[];
+};
+
+layout(std430, set = 2, binding = 0) buffer nnsi
+{
+	 int scoreIndexBuffer[];
+};
+
+layout(std430, set = 3, binding = 0) buffer nnsis
+{
+	 int scoreIndexSubBuffer[];
+};
+
+layout(std430, set = 4, binding = 0) buffer nnsd
+{
+	int scorePerThread;
+	int initDecompose;
+};
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if (index >= size)
+    {
+        return;
+    }
+	
+	uint offsetThread = index * scorePerThread;
+    
+    if (initDecompose == 0)
+    {    
+        uint maxScoreid = offsetThread;
+        for (uint i = offsetThread + 1; i < offsetThread + scorePerThread; i++)
+        {
+            if (scoreBuffer[i] > scoreBuffer[maxScoreid])
+            {
+                maxScoreid = i;
+            }
+        }
+        scoreIndexBuffer[index] = int(maxScoreid);
+    }
+    else
+    {
+        uint maxScoreid = offsetThread;
+        for (uint i = offsetThread + 1; i < offsetThread + scorePerThread; i++)
+        {
+            if (scoreBuffer[scoreIndexSubBuffer[i]] > scoreBuffer[scoreIndexSubBuffer[maxScoreid]])
+            {
+                maxScoreid = i;
+            }
+        }
+        scoreIndexBuffer[index] = scoreIndexSubBuffer[maxScoreid];
+    }
+}

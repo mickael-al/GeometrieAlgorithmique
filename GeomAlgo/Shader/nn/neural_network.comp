@@ -1,0 +1,91 @@
+#version 450
+
+#define GROUP_SIZE 256
+#define MAX_DIM_GROUPS 256
+#define MAX_DIM_THREADS (GROUP_SIZE * MAX_DIM_GROUPS)
+#define MAX_DIM_THREADS_THREADS (MAX_DIM_THREADS * MAX_DIM_GROUPS)
+
+layout(std430, set = 0, binding = 0) buffer nnd 
+{
+	int nb_input_layer;
+	int nb_output_layer;
+	int nb_hiden_layer;
+	int nb_col_hiden_layer;	
+	int activationSize;
+	int weightSize;	
+	int select_sub_best_neural;
+	float mutation_rate;
+	float mutation_multiplayer;
+};
+
+layout(std430, set = 1, binding = 0) buffer nld 
+{
+	int layerId;
+	int size;
+	int seed;
+};
+
+layout(std430, set = 2, binding = 0) buffer nnw
+{
+	 float weightBuffer[];
+};
+
+layout(std430, set = 3, binding = 0) buffer nna
+{
+	 float activationBuffer[];
+};
+
+float sigmoid(float x)
+{
+    return 1 / (1 + exp(-x));
+}
+
+layout(local_size_x = GROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main()
+{    
+    uint index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * MAX_DIM_THREADS + gl_GlobalInvocationID.z * MAX_DIM_THREADS_THREADS;
+    if (index >= size)
+    {
+        return;
+    }
+	uint offset = index%activationSize;	
+	if(offset >= nb_input_layer && offset < nb_input_layer+nb_hiden_layer && layerId == 1)//layerId = 1
+	{
+		uint offsetbaseNN = index-offset;
+		uint oinuputNN = (offsetbaseNN+nb_input_layer);
+		uint weightOffset = (uint(offsetbaseNN/activationSize))*weightSize;
+		float sum = 0.0f;
+		for(int i = 0 ; i < nb_input_layer;i++)
+		{
+			sum += activationBuffer[i+offsetbaseNN] * weightBuffer[weightOffset+((index-oinuputNN)*nb_input_layer)+i];
+		}
+		activationBuffer[index] = sigmoid(sum);
+	}
+	else if (offset >= (activationSize-nb_output_layer) && layerId == (2 + nb_col_hiden_layer) - 1)
+	{
+		uint offsetbaseNN = (index-offset)+nb_input_layer+(layerId-2)*nb_hiden_layer;
+		uint oinuputNN = offsetbaseNN+nb_hiden_layer;		
+		uint weightOffset = ((uint((index-offset)/activationSize))*weightSize)+nb_input_layer*nb_hiden_layer+((layerId-2)*nb_hiden_layer*nb_hiden_layer);
+		float sum = 0.0f;
+		for(int i = 0 ; i < nb_hiden_layer;i++)
+		{
+			sum += activationBuffer[i+offsetbaseNN] * weightBuffer[weightOffset+((index-oinuputNN)*nb_hiden_layer)+i];
+		}
+		activationBuffer[index] = sigmoid(sum);
+	}
+	else if(layerId > 1 && layerId < (2 + nb_col_hiden_layer) - 1 
+	&& offset >= nb_input_layer+(layerId-1)*nb_hiden_layer 
+	&& offset < nb_input_layer+layerId*nb_hiden_layer)
+	{
+		uint offsetbaseNN = (index-offset)+nb_input_layer+(layerId-2)*nb_hiden_layer;
+		uint oinuputNN = offsetbaseNN+nb_hiden_layer;		
+		uint weightOffset = ((uint((index-offset)/activationSize))*weightSize)+nb_input_layer*nb_hiden_layer+((layerId-2)*nb_hiden_layer*nb_hiden_layer);
+		float sum = 0.0f;
+		for(int i = 0 ; i < nb_hiden_layer;i++)
+		{
+			sum += activationBuffer[i+offsetbaseNN] * weightBuffer[weightOffset+((index-oinuputNN)*nb_hiden_layer)+i];
+		}
+		activationBuffer[index] = sigmoid(sum);
+	}
+}
