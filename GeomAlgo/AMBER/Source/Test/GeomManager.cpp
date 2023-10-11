@@ -35,6 +35,16 @@ Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2)
 	return m;
 }
 
+
+float GeomManager::getAngle(glm::vec2 a, glm::vec2 b)
+{
+	float dot = a.x * b.x + a.y * b.y;
+	float magA = std::sqrt(a.x * a.x + a.y * a.y);
+	float magB = std::sqrt(b.x * b.x + b.y * b.y);
+
+	return std::acos(dot / (magA * magB));
+}
+
 void GeomManager::start()
 {
 	m_pc = GameEngine::getPtrClass();
@@ -125,22 +135,56 @@ void GeomManager::update()
 
 	if (m_marcheJarvis)
 	{
-		int min_id = 0;	
-		glm::vec3 pos_id = m_points_clouds[min_id]->getPosition();
-		for (int i = 1; i < m_points_clouds.size(); i++)
+		int min_id = 0;
+
+		std::vector<glm::vec2> point2D;
+		for (int i = 0; i < m_points_clouds.size(); i++)
+		{
+			point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+		}
+		glm::vec2 pos_id = point2D[min_id];
+		for (int i = 1; i < point2D.size(); i++)
 		{			
-			glm::vec3 pos = m_points_clouds[i]->getPosition();
-			if (pos.x < pos_id.x || (pos.x == pos_id.x && pos.z < pos_id.z))
+			glm::vec2 pos = point2D[i];
+			if (pos.x < pos_id.x || (pos.x == pos_id.x && pos.y < pos_id.y))
 			{
 				min_id = i;
 			}
 		}
-		glm::vec3 v(0, 0, -1);
-		int i = 1, q;
-		while (i != min_id)
-		{
-			q = (i + 1) % m_points_clouds.size();
+		glm::vec2 v = glm::vec2(0, -1);
+		std::vector<int> order;
+		int i = min_id;
+		int j = 0;
+		do
+		{	
+			Debug::Log("%d", j);
+			order.push_back(i);
+			
+			j = (i + 1) % point2D.size();
+			float angleMin = getAngle(v, point2D[i] - point2D[j]);
+			float lenghtMax = glm::length(point2D[i] - point2D[j]);
+			int iNew = j;
 
+			for (j; j < iNew+1; j++)
+			{
+				if (j != i) {
+					float angle = getAngle(v, point2D[i] - point2D[j]);
+					if (angleMin > angle || (angleMin == angle && lenghtMax < glm::length(point2D[i] - point2D[j])))
+					{
+						angleMin = angle;
+						lenghtMax = glm::length(point2D[i] - point2D[j]);
+						iNew = j;
+					}
+				}
+			}
+
+			v = point2D[iNew] - point2D[i];
+			i = iNew;
+		} while (i != min_id);
+
+		for(int i = 0; i < order.size(); i++)
+		{
+			Debug::Log("%d", order[i]);
 		}
 		m_marcheJarvis = false;
 	}
