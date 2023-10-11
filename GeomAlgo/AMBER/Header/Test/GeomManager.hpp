@@ -32,17 +32,10 @@ private:
 	bool m_priority = false;
 	bool m_cloudPoint = false;
 	bool m_clearCloudPoint = false;
-	bool m_erase = false;
-	bool m_eraseExtrusion = false;
 	bool m_rotate = false;
-	bool m_extrusion = false;
-	bool m_extrusionRevolution = false;
-	bool m_extrusionCourbe = false;
-
+	bool m_marcheJarvis = false;
 	bool m_cloudButton = false;
 	bool m_isMouseOverUI = false;
-
-	bool m_normalShader = false;
 
 
 	float m_size = 0.05f;

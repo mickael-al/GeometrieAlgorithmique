@@ -122,6 +122,28 @@ void GeomManager::update()
 			m_cloudButton = true;
 		}
 	}
+
+	if (m_marcheJarvis)
+	{
+		int min_id = 0;	
+		glm::vec3 pos_id = m_points_clouds[min_id]->getPosition();
+		for (int i = 1; i < m_points_clouds.size(); i++)
+		{			
+			glm::vec3 pos = m_points_clouds[i]->getPosition();
+			if (pos.x < pos_id.x || (pos.x == pos_id.x && pos.z < pos_id.z))
+			{
+				min_id = i;
+			}
+		}
+		glm::vec3 v(0, 0, -1);
+		int i = 1, q;
+		while (i != min_id)
+		{
+			q = (i + 1) % m_points_clouds.size();
+
+		}
+		m_marcheJarvis = false;
+	}
 }
 
 void GeomManager::stop()
@@ -166,6 +188,10 @@ void GeomManager::render(VulkanMisc* vM)
 				m_clearCloudPoint = m_points_clouds.size() > 0;
 				m_cloudPoint = true;
 				m_cloudButton = false;
+			}
+			if (ImGui::Button("Marche de Jarvis") && m_points_clouds.size() > 2)
+			{
+				m_marcheJarvis = true;
 			}
 		}
 		cnames.clear();
