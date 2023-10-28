@@ -20,6 +20,9 @@ public:
 	void render(VulkanMisc* vM);
 	Model* createSegment(glm::vec2 p1, glm::vec2 p2);
 	glm::vec3 directionToRotation(glm::vec3 direction);
+	float getAngle(glm::vec2 a, glm::vec2 b);
+	void marcheJarvis();
+	void grahamScan();
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
@@ -50,6 +53,8 @@ private:
 
 	std::vector<Model*> m_points_clouds;
 	std::vector<PointLight*> m_points_light_clouds;
+
+	std::vector<Model*> m_segments;
 
 	ShapeBuffer* m_sb = nullptr;
 	Materials* m_pointMat = nullptr;

@@ -11,7 +11,7 @@ struct UniformBufferLight
 	float range;
 	float spotAngle;
 	int status; //DirLight = 0 ; PointLight = 1 ; SpotLight = 2
-	int shadowID;
+	alignas(16) int shadowID;
 };
 
 #endif //__ENGINE_UNIFORM_BUFFER_LIGHT__
