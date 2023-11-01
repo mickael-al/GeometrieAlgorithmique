@@ -49,6 +49,43 @@ float GeomManager::getAngle(glm::vec2 a, glm::vec2 b)
 	return angle;
 }
 
+void GeomManager::Triangulation2D()
+{
+	for (int i = 0; i < m_segments.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_segments[i]);
+	}
+	m_segments.clear();
+	int min_id = 0;
+	std::vector<glm::vec2> point2D;
+	for (int i = 0; i < m_points_clouds.size(); i++)
+	{
+		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+	}
+
+	for (int i = 0; i < point2D.size(); i++)
+	{
+		for (int j = i+1; j < point2D.size(); j++)
+		{
+			if (point2D[i].y < point2D[j].y)
+			{
+				std::swap(point2D[i], point2D[j]);
+			}
+			else if (point2D[i].y == point2D[j].y) {
+				if (point2D[i].x > point2D[j].x)
+				{
+					std::swap(point2D[i], point2D[j]);
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < point2D.size(); i++)
+	{
+		Debug::Log("%f, %f", point2D[i].x, point2D[i].y);
+	}
+}
+
 void GeomManager::grahamScan()
 {
 	for (int i = 0; i < m_segments.size(); i++)
@@ -266,6 +303,11 @@ void GeomManager::update()
 		m_planeActive = false;
 		m_plane->setScale(m_planeShowHide ? glm::vec3(10.0f, 1.0f, 10.0f) : glm::vec3(0.0f));
 	}
+	if (m_convexHullChange)
+	{
+		m_convexHullChange = false;
+		m_convexHull = !m_convexHull;
+	}
 	if (m_clearCloudPoint)
 	{
 		m_clearCloudPoint = false;
@@ -303,15 +345,16 @@ void GeomManager::update()
 				//m_points_light_clouds.push_back(pl);
 				if (m_points_clouds.size() > 2)
 				{
-					if (m_marcheJarvis)
-					{
-						marcheJarvis();
+					if (!m_convexHull) {
+						if (m_marcheJarvis)
+						{
+							marcheJarvis();
+						}
+						else
+						{
+							grahamScan();
+						}
 					}
-					else
-					{
-						grahamScan();
-					}
-					
 				}
 			}
 		}
@@ -366,6 +409,11 @@ void GeomManager::render(VulkanMisc* vM)
 				m_cloudPoint = true;
 				m_cloudButton = false;
 			}
+			if (ImGui::Checkbox("Create Convex Hull", &m_convexHullCheck))
+			{
+				m_convexHullChange = true;
+			}
+
 			if (ImGui::Button("Marche de Jarvis"))
 			{
 				m_marcheJarvis = true;
@@ -374,6 +422,13 @@ void GeomManager::render(VulkanMisc* vM)
 			if (ImGui::Button("Graham-Scan"))
 			{
 				m_marcheJarvis = false;
+			}
+			if (ImGui::Button("Triangulation 2D"))
+			{
+				if (m_points_clouds.size() > 2)
+				{
+					Triangulation2D();
+				}
 			}
 		}
 		cnames.clear();

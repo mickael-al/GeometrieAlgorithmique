@@ -23,6 +23,7 @@ public:
 	float getAngle(glm::vec2 a, glm::vec2 b);
 	void marcheJarvis();
 	void grahamScan();
+	void Triangulation2D();
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
@@ -31,11 +32,14 @@ private:
 	bool m_open = false;
 	bool m_cameraChange = false;
 	bool m_planeShowHide = false;
+	bool m_convexHullChange = false;
+	bool m_convexHullCheck = true;
 	bool m_planeActive = true;
 	bool m_priority = false;
 	bool m_cloudPoint = false;
 	bool m_clearCloudPoint = false;
 	bool m_rotate = false;
+	bool m_convexHull = false;
 	bool m_marcheJarvis = false;
 	bool m_cloudButton = false;
 	bool m_isMouseOverUI = false;
