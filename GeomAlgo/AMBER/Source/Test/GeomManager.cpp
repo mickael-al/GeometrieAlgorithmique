@@ -56,14 +56,13 @@ void GeomManager::Triangulation2D()
 		m_pc.modelManager->destroyModel(m_segments[i]);
 	}
 	m_segments.clear();
-	int min_id = 0;
 	std::vector<glm::vec2> point2D;
 	for (int i = 0; i < m_points_clouds.size(); i++)
 	{
 		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
 	}
 
-	for (int i = 0; i < point2D.size(); i++)
+	/*for (int i = 0; i < point2D.size(); i++)
 	{
 		for (int j = i+1; j < point2D.size(); j++)
 		{
@@ -78,12 +77,24 @@ void GeomManager::Triangulation2D()
 				}
 			}
 		}
-	}
-
+	}*/
 	for (int i = 0; i < point2D.size(); i++)
 	{
-		Debug::Log("%f, %f", point2D[i].x, point2D[i].y);
+		for (int j = i + 1; j < point2D.size(); j++)
+		{
+			if (point2D[i].x > point2D[j].x)
+			{
+				std::swap(point2D[i], point2D[j]);
+			}
+			else if (point2D[i].x == point2D[j].x) {
+				if (point2D[i].y > point2D[j].y)
+				{
+					std::swap(point2D[i], point2D[j]);
+				}
+			}
+		}
 	}
+	// TIPOTE LA
 }
 
 void GeomManager::grahamScan()
