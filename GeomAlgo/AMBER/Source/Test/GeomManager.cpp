@@ -6,6 +6,7 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/intersect.hpp>
 #include <iostream>
 
 GeomManager::GeomManager(Model* plane)
@@ -49,6 +50,45 @@ float GeomManager::getAngle(glm::vec2 a, glm::vec2 b)
 	return angle;
 }
 
+bool onSegment(glm::vec2 p, glm::vec2 q, glm::vec2 r)
+{
+	if (q.x <= max(p.x, r.x) && q.x >= min(p.x, r.x) && q.y <= max(p.y, r.y) && q.y >= min(p.y, r.y))	
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+int orientation(glm::vec2 p, glm::vec2 q, glm::vec2 r)
+{
+	int val = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
+
+	if (val == 0) return 0;
+
+	return (val > 0) ? 1 : 2;
+}
+
+
+bool SegmentsIntersect(glm::vec2 p1, glm::vec2 q1, glm::vec2 p2, glm::vec2 q2)
+{
+	int o1 = orientation(p1, q1, p2);
+	int o2 = orientation(p1, q1, q2);
+	int o3 = orientation(p2, q2, p1);
+	int o4 = orientation(p2, q2, q1);
+
+	if (o1 != o2 && o3 != o4)
+		return true;
+
+	if (o1 == 0 && onSegment(p1, p2, q1)) return true;
+	if (o2 == 0 && onSegment(p1, q2, q1)) return true;
+	if (o3 == 0 && onSegment(p2, p1, q2)) return true;
+	if (o4 == 0 && onSegment(p2, q1, q2)) return true;
+
+	return false;
+}
+
 void GeomManager::Triangulation2D()
 {
 	for (int i = 0; i < m_segments.size(); i++)
@@ -62,39 +102,62 @@ void GeomManager::Triangulation2D()
 		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
 	}
 
-	/*for (int i = 0; i < point2D.size(); i++)
-	{
-		for (int j = i+1; j < point2D.size(); j++)
+	std::sort(point2D.begin(), point2D.end(), [](const glm::vec2& a, const glm::vec2& b) 
 		{
-			if (point2D[i].y < point2D[j].y)
+		return a.x < b.x || (a.x == b.x && a.y < b.y);
+		});
+
+	std::vector<glm::uvec3> triangulation;
+	std::vector<glm::uvec2> edges;	
+	edges.push_back(glm::uvec2(0, 1));
+	edges.push_back(glm::uvec2(1, 2));
+	edges.push_back(glm::uvec2(2, 0));
+	triangulation.push_back(glm::uvec3(0,1,2));
+
+	for (int i = 3; i < point2D.size(); i++)
+	{
+		std::vector<glm::uvec2> new_edges;
+		for (int j = 0; j < i; j++)
+		{
+			bool isIntersect = false;
+			for (int k = 0; k < edges.size(); k++)
 			{
-				std::swap(point2D[i], point2D[j]);
-			}
-			else if (point2D[i].y == point2D[j].y) {
-				if (point2D[i].x > point2D[j].x)
+				if (j != edges[k].x && j != edges[k].y)
 				{
-					std::swap(point2D[i], point2D[j]);
+					if (SegmentsIntersect(point2D[i], point2D[j], point2D[edges[k].x], point2D[edges[k].y]))
+					{
+						isIntersect = true;
+						break;
+					}
 				}
 			}
-		}
-	}*/
-	for (int i = 0; i < point2D.size(); i++)
-	{
-		for (int j = i + 1; j < point2D.size(); j++)
-		{
-			if (point2D[i].x > point2D[j].x)
+			if (!isIntersect)
 			{
-				std::swap(point2D[i], point2D[j]);
+				new_edges.push_back(glm::uvec2(i,j));
 			}
-			else if (point2D[i].x == point2D[j].x) {
-				if (point2D[i].y > point2D[j].y)
-				{
-					std::swap(point2D[i], point2D[j]);
-				}
-			}
+		}		
+		if (new_edges.size() < 2)
+		{
+			Debug::Log("AAAAAAAAAAA %d",new_edges.size());
 		}
+		for (int j = 0; j < new_edges.size(); j++)
+		{
+			edges.push_back(new_edges[j]);
+		}			
 	}
-	// TIPOTE LA
+
+	for (int i = 0; i < edges.size(); i++)
+	{
+		m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
+	}
+
+	/*for (int i = 0; i < triangulation.size(); i++)
+	{
+		m_segments.push_back(createSegment(point2D[triangulation[i][0]], point2D[triangulation[i][1]]));
+		m_segments.push_back(createSegment(point2D[triangulation[i][1]], point2D[triangulation[i][2]]));
+		m_segments.push_back(createSegment(point2D[triangulation[i][2]], point2D[triangulation[i][0]]));
+	}*/
+	Debug::Log("%d", triangulation.size());
 }
 
 void GeomManager::grahamScan()
@@ -356,7 +419,8 @@ void GeomManager::update()
 				//m_points_light_clouds.push_back(pl);
 				if (m_points_clouds.size() > 2)
 				{
-					if (!m_convexHull) {
+					if (!m_convexHull) 
+					{
 						if (m_marcheJarvis)
 						{
 							marcheJarvis();
@@ -366,6 +430,10 @@ void GeomManager::update()
 							grahamScan();
 						}
 					}
+					else
+					{
+						Triangulation2D();
+					}
 				}
 			}
 		}
@@ -374,6 +442,7 @@ void GeomManager::update()
 			m_cloudButton = true;
 		}
 	}
+
 
 }
 
