@@ -70,7 +70,6 @@ int orientation(glm::vec2 p, glm::vec2 q, glm::vec2 r)
 	return (val > 0) ? 1 : 2;
 }
 
-
 bool SegmentsIntersect(glm::vec2 p1, glm::vec2 q1, glm::vec2 p2, glm::vec2 q2)
 {
 	int o1 = orientation(p1, q1, p2);
@@ -91,23 +90,11 @@ bool SegmentsIntersect(glm::vec2 p1, glm::vec2 q1, glm::vec2 p2, glm::vec2 q2)
 
 const double EPSILON = 1e-12;
 
-struct Edge {
-	int a, b;
-
-	Edge(int a, int b) : a(a), b(b) {}
-};
-
-struct Point {
-	double x, y;
-
-	Point(double x, double y) : x(x), y(y) {}
-};
-
-double crossProduct(const Point& A, const Point& B) {
+double crossProduct(const glm::vec2& A, const glm::vec2& B) {
 	return A.x * B.y - A.y * B.x;
 }
 
-bool insideCircle(const Point& A, const Point& B, const Point& C, const Point& P) {
+bool insideCircle(const glm::vec2& A, const glm::vec2& B, const glm::vec2& C, const glm::vec2& P) {
 	double ax = A.x - P.x;
 	double ay = A.y - P.y;
 	double bx = B.x - P.x;
@@ -122,80 +109,60 @@ bool insideCircle(const Point& A, const Point& B, const Point& C, const Point& P
 	return (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)) >= EPSILON;
 }
 
-std::vector<Edge> triangulate(std::vector<Point>& points) {
-	int n = points.size();
-	std::vector<Edge> edges;
+void flipEdges(std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points)
+{
+	for (int i = 0; i < triangles.size(); ++i) 
+	{
+		for (int j = 0; j < 3; ++j) 
+		{
+			int p1 = triangles[i][j];
+			int p2 = triangles[i][(j + 1) % 3];
 
-	// Sorting the points by x-coordinate
-	std::sort(points.begin(), points.end(), [](const Point& a, const Point& b) {
-		return a.x <= b.x;
-		});
-
-	// Creating the lower hull
-	for (int i = 0; i < n; i++) {
-		while (edges.size() >= 2) {
-			int j = edges.size() - 2;
-			int k = edges.size() - 1;
-			Point A = points[edges[j].a];
-			Point B = points[edges[j].b];
-			Point C = points[edges[k].b];
-
-			if (crossProduct(Point(B.x - A.x, B.y - A.y), Point(C.x - B.x, C.y - B.y)) > 0) {
-				break;
+			// Recherchez un triangle voisin partageant l'arête (p1, p2)
+			int neighborIndex = -1;
+			for (int k = 0; k < triangles.size(); ++k) 
+			{
+				if (k != i) 
+				{
+					for (int l = 0; l < 3; ++l) 
+					{
+						if ((triangles[k][l] == p1 && triangles[k][(l + 1) % 3] == p2) || (triangles[k][l] == p2 && triangles[k][(l + 1) % 3] == p1)) {
+							neighborIndex = k;
+							break;
+						}
+					}
+				}
+				if (neighborIndex != -1) 
+				{
+					break;
+				}
 			}
 
-			edges.pop_back();
-		}
-		edges.push_back(Edge(edges.size(), i));
-	}
-	int lower = edges.size();
+			if (neighborIndex != -1) 
+			{
+				int p3 = triangles[i][(j + 2) % 3];
+				int p4 = -1;
 
-	// Creating the upper hull
-	for (int i = n - 2, t = lower + 1; i >= 0; i--) {
-		while (edges.size() >= t) {
-			int j = edges.size() - 2;
-			int k = edges.size() - 1;
-			Point A = points[edges[j].a];
-			Point B = points[edges[j].b];
-			Point C = points[edges[k].b];
+				for (int l = 0; l < 3; ++l) 
+				{
+					if (triangles[neighborIndex][l] != p1 && triangles[neighborIndex][l] != p2) 
+					{
+						p4 = triangles[neighborIndex][l];
+						break;
+					}
+				}
 
-			if (crossProduct(Point(B.x - A.x, B.y - A.y), Point(C.x - B.x, C.y - B.y)) > 0) {
-				break;
+				// Vérifiez si le flipping d'arêtes est nécessaire
+				if (insideCircle(points[p3]*100.0f, points[p1] * 100.0f, points[p2] * 100.0f, points[p4] * 100.0f))
+				{
+					// Effectuez le flipping en modifiant les triangles
+					triangles[i][j] = p4;
+					triangles[neighborIndex][0] = p3;
+					triangles[neighborIndex][1] = p4;
+				}
 			}
-
-			edges.pop_back();
-		}
-		edges.push_back(Edge(i, edges.size()));
-	}
-
-	// Removing the duplicate edges from the hull
-	edges.pop_back();
-
-	// Creating the triangulation
-	std::vector<Edge> result;
-	for (int i = 0; i < edges.size(); i++) {
-		int a = edges[i].a;
-		int b = edges[i].b;
-		Point A = points[a];
-		Point B = points[b];
-		bool flag = true;
-
-		for (int j = 0; j < n; j++) {
-			if (j == a || j == b) {
-				continue;
-			}
-			Point P = points[j];
-			if (insideCircle(A, B, P, points[(a + b) >> 1])) {
-				flag = false;
-				break;
-			}
-		}
-		if (flag) {
-			result.push_back(Edge(a, b));
 		}
 	}
-
-	return result;
 }
 
 void GeomManager::Triangulation2D()
@@ -221,7 +188,14 @@ void GeomManager::Triangulation2D()
 	edges.push_back(glm::uvec2(0, 1));
 	edges.push_back(glm::uvec2(1, 2));
 	edges.push_back(glm::uvec2(2, 0));
-	triangulation.push_back(glm::uvec3(0,1,2));
+	if (orientation(point2D[0], point2D[1], point2D[2]) == 2)
+	{
+		triangulation.push_back(glm::uvec3(0, 2, 1));
+	}
+	else
+	{
+		triangulation.push_back(glm::uvec3(0, 1, 2));
+	}
 
 	for (int i = 3; i < point2D.size(); i++)
 	{
@@ -244,16 +218,45 @@ void GeomManager::Triangulation2D()
 			{
 				new_edges.push_back(glm::uvec2(i,j));
 			}
-		}		
+		}				
 		for (int j = 0; j < new_edges.size(); j++)
 		{
-			edges.push_back(new_edges[j]);
+			edges.push_back(new_edges[j]);		
+			if (j != 0)
+			{
+				int nx = new_edges[j].x;
+				int ny = nx == new_edges[j].y ? (nx == new_edges[j - 1].x ? new_edges[j - 1].y : new_edges[j - 1].x) : new_edges[j].y;
+				int nz = nx == new_edges[j].y || ny == new_edges[j].y ? (nx == new_edges[j - 1].x || ny == new_edges[j - 1].x ? new_edges[j - 1].y : new_edges[j - 1].x) : new_edges[j].y;				
+				//l'ordre antihoraire
+				if (orientation(point2D[nx], point2D[ny], point2D[nz]) == 2) 
+				{
+					// Swap ny et nz si l'orientation est horaire
+					std::swap(ny, nz);
+				}
+
+				triangulation.push_back(glm::uvec3(nx, ny, nz));
+			}
 		}			
 	}
+	Debug::Log("before edge flipping");
+	for (int i = 0; i < triangulation.size(); i++)
+	{
+		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
+	}
 
+	flipEdges(triangulation, point2D);
+
+	Debug::Log("after edge flipping");
+	for (int i = 0; i < triangulation.size(); i++)
+	{
+		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
+		m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
+		m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
+		m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
+	}
 	for (int i = 0; i < edges.size(); i++)
 	{
-		m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
+		//m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
 	}
 }
 
