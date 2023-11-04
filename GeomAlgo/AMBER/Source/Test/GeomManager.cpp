@@ -89,6 +89,115 @@ bool SegmentsIntersect(glm::vec2 p1, glm::vec2 q1, glm::vec2 p2, glm::vec2 q2)
 	return false;
 }
 
+const double EPSILON = 1e-12;
+
+struct Edge {
+	int a, b;
+
+	Edge(int a, int b) : a(a), b(b) {}
+};
+
+struct Point {
+	double x, y;
+
+	Point(double x, double y) : x(x), y(y) {}
+};
+
+double crossProduct(const Point& A, const Point& B) {
+	return A.x * B.y - A.y * B.x;
+}
+
+bool insideCircle(const Point& A, const Point& B, const Point& C, const Point& P) {
+	double ax = A.x - P.x;
+	double ay = A.y - P.y;
+	double bx = B.x - P.x;
+	double by = B.y - P.y;
+	double cx = C.x - P.x;
+	double cy = C.y - P.y;
+
+	double a2 = ax * ax + ay * ay;
+	double b2 = bx * bx + by * by;
+	double c2 = cx * cx + cy * cy;
+
+	return (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)) >= EPSILON;
+}
+
+std::vector<Edge> triangulate(std::vector<Point>& points) {
+	int n = points.size();
+	std::vector<Edge> edges;
+
+	// Sorting the points by x-coordinate
+	std::sort(points.begin(), points.end(), [](const Point& a, const Point& b) {
+		return a.x <= b.x;
+		});
+
+	// Creating the lower hull
+	for (int i = 0; i < n; i++) {
+		while (edges.size() >= 2) {
+			int j = edges.size() - 2;
+			int k = edges.size() - 1;
+			Point A = points[edges[j].a];
+			Point B = points[edges[j].b];
+			Point C = points[edges[k].b];
+
+			if (crossProduct(Point(B.x - A.x, B.y - A.y), Point(C.x - B.x, C.y - B.y)) > 0) {
+				break;
+			}
+
+			edges.pop_back();
+		}
+		edges.push_back(Edge(edges.size(), i));
+	}
+	int lower = edges.size();
+
+	// Creating the upper hull
+	for (int i = n - 2, t = lower + 1; i >= 0; i--) {
+		while (edges.size() >= t) {
+			int j = edges.size() - 2;
+			int k = edges.size() - 1;
+			Point A = points[edges[j].a];
+			Point B = points[edges[j].b];
+			Point C = points[edges[k].b];
+
+			if (crossProduct(Point(B.x - A.x, B.y - A.y), Point(C.x - B.x, C.y - B.y)) > 0) {
+				break;
+			}
+
+			edges.pop_back();
+		}
+		edges.push_back(Edge(i, edges.size()));
+	}
+
+	// Removing the duplicate edges from the hull
+	edges.pop_back();
+
+	// Creating the triangulation
+	std::vector<Edge> result;
+	for (int i = 0; i < edges.size(); i++) {
+		int a = edges[i].a;
+		int b = edges[i].b;
+		Point A = points[a];
+		Point B = points[b];
+		bool flag = true;
+
+		for (int j = 0; j < n; j++) {
+			if (j == a || j == b) {
+				continue;
+			}
+			Point P = points[j];
+			if (insideCircle(A, B, P, points[(a + b) >> 1])) {
+				flag = false;
+				break;
+			}
+		}
+		if (flag) {
+			result.push_back(Edge(a, b));
+		}
+	}
+
+	return result;
+}
+
 void GeomManager::Triangulation2D()
 {
 	for (int i = 0; i < m_segments.size(); i++)
@@ -102,7 +211,7 @@ void GeomManager::Triangulation2D()
 		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
 	}
 
-	std::sort(point2D.begin(), point2D.end(), [](const glm::vec2& a, const glm::vec2& b) 
+	std::sort(point2D.begin(), point2D.end(), [](const glm::vec2& a, const glm::vec2& b)
 		{
 		return a.x < b.x || (a.x == b.x && a.y < b.y);
 		});
@@ -124,7 +233,7 @@ void GeomManager::Triangulation2D()
 			{
 				if (j != edges[k].x && j != edges[k].y)
 				{
-					if (SegmentsIntersect(point2D[i], point2D[j], point2D[edges[k].x], point2D[edges[k].y]))
+					if (SegmentsIntersect(point2D[i]*100.0f, point2D[j]*100.0f, point2D[edges[k].x]*100.0f, point2D[edges[k].y]*100.0f))
 					{
 						isIntersect = true;
 						break;
@@ -136,10 +245,6 @@ void GeomManager::Triangulation2D()
 				new_edges.push_back(glm::uvec2(i,j));
 			}
 		}		
-		if (new_edges.size() < 2)
-		{
-			Debug::Log("AAAAAAAAAAA %d",new_edges.size());
-		}
 		for (int j = 0; j < new_edges.size(); j++)
 		{
 			edges.push_back(new_edges[j]);
@@ -150,14 +255,6 @@ void GeomManager::Triangulation2D()
 	{
 		m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
 	}
-
-	/*for (int i = 0; i < triangulation.size(); i++)
-	{
-		m_segments.push_back(createSegment(point2D[triangulation[i][0]], point2D[triangulation[i][1]]));
-		m_segments.push_back(createSegment(point2D[triangulation[i][1]], point2D[triangulation[i][2]]));
-		m_segments.push_back(createSegment(point2D[triangulation[i][2]], point2D[triangulation[i][0]]));
-	}*/
-	Debug::Log("%d", triangulation.size());
 }
 
 void GeomManager::grahamScan()
