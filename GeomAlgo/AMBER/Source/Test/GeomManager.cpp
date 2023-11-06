@@ -222,41 +222,66 @@ void GeomManager::Triangulation2D()
 		for (int j = 0; j < new_edges.size(); j++)
 		{
 			edges.push_back(new_edges[j]);		
-			if (j != 0)
-			{
-				int nx = new_edges[j].x;
-				int ny = nx == new_edges[j].y ? (nx == new_edges[j - 1].x ? new_edges[j - 1].y : new_edges[j - 1].x) : new_edges[j].y;
-				int nz = nx == new_edges[j].y || ny == new_edges[j].y ? (nx == new_edges[j - 1].x || ny == new_edges[j - 1].x ? new_edges[j - 1].y : new_edges[j - 1].x) : new_edges[j].y;				
-				//l'ordre antihoraire
-				if (orientation(point2D[nx], point2D[ny], point2D[nz]) == 2) 
-				{
-					// Swap ny et nz si l'orientation est horaire
-					std::swap(ny, nz);
-				}
-
-				triangulation.push_back(glm::uvec3(nx, ny, nz));
-			}
-		}			
+		}
 	}
+
+	std::set<unsigned int> uniqueIndices;
+	for (int i = 0; i < edges.size(); i++)
+	{
+		for (int j = i+1; j < edges.size(); j++)
+		{
+			for (int k = j + 1; k < edges.size(); k++)
+			{
+				uniqueIndices.clear();
+				uniqueIndices.insert(edges[i].x);
+				uniqueIndices.insert(edges[i].y);
+				uniqueIndices.insert(edges[j].x);
+				uniqueIndices.insert(edges[j].y);
+				uniqueIndices.insert(edges[k].x);
+				uniqueIndices.insert(edges[k].y);
+
+				if (uniqueIndices.size() == 3)
+				{
+					auto it = uniqueIndices.begin();
+					glm::uvec3 trig;
+					trig.x = *it;
+					it++;
+					trig.y = *it;
+					it++;
+					trig.z = *it;
+					it++;
+
+					if (orientation(point2D[trig.x], point2D[trig.y], point2D[trig.z]) == 2)
+					{
+						unsigned int temp = trig.y;
+						trig.y = trig.z;
+						trig.z = temp;
+					}
+					triangulation.push_back(trig);					
+				}
+			}
+		}
+	}
+
 	Debug::Log("before edge flipping");
 	for (int i = 0; i < triangulation.size(); i++)
 	{
 		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
 	}
 
-	flipEdges(triangulation, point2D);
+	//flipEdges(triangulation, point2D);
 
 	Debug::Log("after edge flipping");
 	for (int i = 0; i < triangulation.size(); i++)
 	{
 		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
-		m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
-		m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
-		m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
+		//m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
+		//m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
+		//m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
 	}
 	for (int i = 0; i < edges.size(); i++)
 	{
-		//m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
+		m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
 	}
 }
 
