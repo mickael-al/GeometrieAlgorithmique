@@ -94,72 +94,38 @@ double crossProduct(const glm::vec2& A, const glm::vec2& B) {
 	return A.x * B.y - A.y * B.x;
 }
 
-bool insideCircle(const glm::vec2& A, const glm::vec2& B, const glm::vec2& C, const glm::vec2& P) {
-	double ax = A.x - P.x;
-	double ay = A.y - P.y;
-	double bx = B.x - P.x;
-	double by = B.y - P.y;
-	double cx = C.x - P.x;
-	double cy = C.y - P.y;
+bool isInCircumcircle(const glm::vec2& point, const std::vector<glm::vec2>& points, const glm::uvec3& triangle)
+{
+	const glm::vec2& A = points[triangle.x];
+	const glm::vec2& B = points[triangle.y];
+	const glm::vec2& C = points[triangle.z];
 
-	double a2 = ax * ax + ay * ay;
-	double b2 = bx * bx + by * by;
-	double c2 = cx * cx + cy * cy;
+	float detT = glm::determinant(glm::mat3(glm::vec3(A.x, A.y, 1), glm::vec3(B.x, B.y, 1), glm::vec3(C.x, C.y, 1)));
 
-	return (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)) >= EPSILON;
+	float a = glm::length2(glm::vec2(B.x, B.y) - glm::vec2(C.x, C.y));
+	float b = glm::length2(glm::vec2(C.x, C.y) - glm::vec2(A.x, A.y));
+	float c = glm::length2(glm::vec2(A.x, A.y) - glm::vec2(B.x, B.y));
+
+	glm::vec2 center;
+	center.x = (a * A.x + b * B.x + c * C.x) / (2 * detT);
+	center.y = (a * A.y + b * B.y + c * C.y) / (2 * detT);
+
+	float radiusSquared = glm::length2(center - glm::vec2(A.x, A.y));
+
+	float pointDistanceSquared = glm::length2(point - center);
+
+	return pointDistanceSquared <= radiusSquared;
 }
 
-void flipEdges(std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points)
+void edgeFlip(std::vector<glm::uvec2>& edges, std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points) 
 {
-	for (int i = 0; i < triangles.size(); ++i) 
+	for (int i = 0; i < triangles.size(); i++)
 	{
-		for (int j = 0; j < 3; ++j) 
+		for (int j = 0; j < points.size(); j++)
 		{
-			int p1 = triangles[i][j];
-			int p2 = triangles[i][(j + 1) % 3];
-
-			// Recherchez un triangle voisin partageant l'arête (p1, p2)
-			int neighborIndex = -1;
-			for (int k = 0; k < triangles.size(); ++k) 
+			if (j != triangles[i].x && j!= triangles[i].y && j != triangles[i].z && isInCircumcircle(points[j], points, triangles[i]))
 			{
-				if (k != i) 
-				{
-					for (int l = 0; l < 3; ++l) 
-					{
-						if ((triangles[k][l] == p1 && triangles[k][(l + 1) % 3] == p2) || (triangles[k][l] == p2 && triangles[k][(l + 1) % 3] == p1)) {
-							neighborIndex = k;
-							break;
-						}
-					}
-				}
-				if (neighborIndex != -1) 
-				{
-					break;
-				}
-			}
-
-			if (neighborIndex != -1) 
-			{
-				int p3 = triangles[i][(j + 2) % 3];
-				int p4 = -1;
-
-				for (int l = 0; l < 3; ++l) 
-				{
-					if (triangles[neighborIndex][l] != p1 && triangles[neighborIndex][l] != p2) 
-					{
-						p4 = triangles[neighborIndex][l];
-						break;
-					}
-				}
-
-				// Vérifiez si le flipping d'arêtes est nécessaire
-				if (insideCircle(points[p3]*100.0f, points[p1] * 100.0f, points[p2] * 100.0f, points[p4] * 100.0f))
-				{
-					// Effectuez le flipping en modifiant les triangles
-					triangles[i][j] = p4;
-					triangles[neighborIndex][0] = p3;
-					triangles[neighborIndex][1] = p4;
-				}
+				Debug::Log("P: %d T: %d %d %d",j, triangles[i].x, triangles[i].y, triangles[i].z);
 			}
 		}
 	}
@@ -188,14 +154,6 @@ void GeomManager::DelaunayTriangulation2D()
 	edges.push_back(glm::uvec2(0, 1));
 	edges.push_back(glm::uvec2(1, 2));
 	edges.push_back(glm::uvec2(2, 0));
-	if (orientation(point2D[0], point2D[1], point2D[2]) == 2)
-	{
-		triangulation.push_back(glm::uvec3(0, 2, 1));
-	}
-	else
-	{
-		triangulation.push_back(glm::uvec3(0, 1, 2));
-	}
 
 	for (int i = 3; i < point2D.size(); i++)
 	{
@@ -262,19 +220,12 @@ void GeomManager::DelaunayTriangulation2D()
 			}
 		}
 	}
+	Debug::Log("Size: %d", triangulation.size());
+	edgeFlip(edges,triangulation, point2D);
 
-	Debug::Log("before edge flipping");
+	
 	for (int i = 0; i < triangulation.size(); i++)
 	{
-		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
-	}
-
-	flipEdges(triangulation, point2D);
-
-	Debug::Log("after edge flipping");
-	for (int i = 0; i < triangulation.size(); i++)
-	{
-		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
 		m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
 		m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
 		m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
