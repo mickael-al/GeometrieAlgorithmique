@@ -24,6 +24,7 @@ public:
 	void marcheJarvis();
 	void grahamScan();
 	void Triangulation2D();
+	void DelaunayTriangulation2D();
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;

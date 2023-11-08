@@ -165,6 +165,122 @@ void flipEdges(std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>&
 	}
 }
 
+void GeomManager::DelaunayTriangulation2D()
+{
+	for (int i = 0; i < m_segments.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_segments[i]);
+	}
+	m_segments.clear();
+	std::vector<glm::vec2> point2D;
+	for (int i = 0; i < m_points_clouds.size(); i++)
+	{
+		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+	}
+
+	std::sort(point2D.begin(), point2D.end(), [](const glm::vec2& a, const glm::vec2& b)
+		{
+			return a.x < b.x || (a.x == b.x && a.y < b.y);
+		});
+
+	std::vector<glm::uvec3> triangulation;
+	std::vector<glm::uvec2> edges;
+	edges.push_back(glm::uvec2(0, 1));
+	edges.push_back(glm::uvec2(1, 2));
+	edges.push_back(glm::uvec2(2, 0));
+	if (orientation(point2D[0], point2D[1], point2D[2]) == 2)
+	{
+		triangulation.push_back(glm::uvec3(0, 2, 1));
+	}
+	else
+	{
+		triangulation.push_back(glm::uvec3(0, 1, 2));
+	}
+
+	for (int i = 3; i < point2D.size(); i++)
+	{
+		std::vector<glm::uvec2> new_edges;
+		for (int j = 0; j < i; j++)
+		{
+			bool isIntersect = false;
+			for (int k = 0; k < edges.size(); k++)
+			{
+				if (j != edges[k].x && j != edges[k].y)
+				{
+					if (SegmentsIntersect(point2D[i] * 100.0f, point2D[j] * 100.0f, point2D[edges[k].x] * 100.0f, point2D[edges[k].y] * 100.0f))
+					{
+						isIntersect = true;
+						break;
+					}
+				}
+			}
+			if (!isIntersect)
+			{
+				new_edges.push_back(glm::uvec2(i, j));
+			}
+		}
+		for (int j = 0; j < new_edges.size(); j++)
+		{
+			edges.push_back(new_edges[j]);
+		}
+	}
+
+	std::set<unsigned int> uniqueIndices;
+	for (int i = 0; i < edges.size(); i++)
+	{
+		for (int j = i + 1; j < edges.size(); j++)
+		{
+			for (int k = j + 1; k < edges.size(); k++)
+			{
+				uniqueIndices.clear();
+				uniqueIndices.insert(edges[i].x);
+				uniqueIndices.insert(edges[i].y);
+				uniqueIndices.insert(edges[j].x);
+				uniqueIndices.insert(edges[j].y);
+				uniqueIndices.insert(edges[k].x);
+				uniqueIndices.insert(edges[k].y);
+
+				if (uniqueIndices.size() == 3)
+				{
+					auto it = uniqueIndices.begin();
+					glm::uvec3 trig;
+					trig.x = *it;
+					it++;
+					trig.y = *it;
+					it++;
+					trig.z = *it;
+					it++;
+
+					if (orientation(point2D[trig.x], point2D[trig.y], point2D[trig.z]) == 2)
+					{
+						unsigned int temp = trig.y;
+						trig.y = trig.z;
+						trig.z = temp;
+					}
+					triangulation.push_back(trig);
+				}
+			}
+		}
+	}
+
+	Debug::Log("before edge flipping");
+	for (int i = 0; i < triangulation.size(); i++)
+	{
+		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
+	}
+
+	flipEdges(triangulation, point2D);
+
+	Debug::Log("after edge flipping");
+	for (int i = 0; i < triangulation.size(); i++)
+	{
+		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
+		m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
+		m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
+		m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
+	}
+}
+
 void GeomManager::Triangulation2D()
 {
 	for (int i = 0; i < m_segments.size(); i++)
@@ -183,19 +299,10 @@ void GeomManager::Triangulation2D()
 		return a.x < b.x || (a.x == b.x && a.y < b.y);
 		});
 
-	std::vector<glm::uvec3> triangulation;
 	std::vector<glm::uvec2> edges;	
 	edges.push_back(glm::uvec2(0, 1));
 	edges.push_back(glm::uvec2(1, 2));
 	edges.push_back(glm::uvec2(2, 0));
-	if (orientation(point2D[0], point2D[1], point2D[2]) == 2)
-	{
-		triangulation.push_back(glm::uvec3(0, 2, 1));
-	}
-	else
-	{
-		triangulation.push_back(glm::uvec3(0, 1, 2));
-	}
 
 	for (int i = 3; i < point2D.size(); i++)
 	{
@@ -225,60 +332,6 @@ void GeomManager::Triangulation2D()
 		}
 	}
 
-	std::set<unsigned int> uniqueIndices;
-	for (int i = 0; i < edges.size(); i++)
-	{
-		for (int j = i+1; j < edges.size(); j++)
-		{
-			for (int k = j + 1; k < edges.size(); k++)
-			{
-				uniqueIndices.clear();
-				uniqueIndices.insert(edges[i].x);
-				uniqueIndices.insert(edges[i].y);
-				uniqueIndices.insert(edges[j].x);
-				uniqueIndices.insert(edges[j].y);
-				uniqueIndices.insert(edges[k].x);
-				uniqueIndices.insert(edges[k].y);
-
-				if (uniqueIndices.size() == 3)
-				{
-					auto it = uniqueIndices.begin();
-					glm::uvec3 trig;
-					trig.x = *it;
-					it++;
-					trig.y = *it;
-					it++;
-					trig.z = *it;
-					it++;
-
-					if (orientation(point2D[trig.x], point2D[trig.y], point2D[trig.z]) == 2)
-					{
-						unsigned int temp = trig.y;
-						trig.y = trig.z;
-						trig.z = temp;
-					}
-					triangulation.push_back(trig);					
-				}
-			}
-		}
-	}
-
-	Debug::Log("before edge flipping");
-	for (int i = 0; i < triangulation.size(); i++)
-	{
-		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
-	}
-
-	//flipEdges(triangulation, point2D);
-
-	Debug::Log("after edge flipping");
-	for (int i = 0; i < triangulation.size(); i++)
-	{
-		Debug::Log("%d %d %d", triangulation[i].x, triangulation[i].y, triangulation[i].z);
-		//m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
-		//m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
-		//m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
-	}
 	for (int i = 0; i < edges.size(); i++)
 	{
 		m_segments.push_back(createSegment(point2D[edges[i].x], point2D[edges[i].y]));
@@ -633,6 +686,13 @@ void GeomManager::render(VulkanMisc* vM)
 				if (m_points_clouds.size() > 2)
 				{
 					Triangulation2D();
+				}
+			}
+			if (ImGui::Button("Delaunay Triangulation 2D"))
+			{
+				if (m_points_clouds.size() > 2)
+				{
+					DelaunayTriangulation2D();
 				}
 			}
 		}
