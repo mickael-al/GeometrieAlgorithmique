@@ -96,25 +96,21 @@ double crossProduct(const glm::vec2& A, const glm::vec2& B) {
 
 bool isInCircumcircle(const glm::vec2& point, const std::vector<glm::vec2>& points, const glm::uvec3& triangle)
 {
-	const glm::vec2& A = points[triangle.x];
-	const glm::vec2& B = points[triangle.y];
-	const glm::vec2& C = points[triangle.z];
+	glm::vec3 _A = glm::vec3(points[triangle.x],0);
+	glm::vec3 _B = glm::vec3(points[triangle.y],0);
+	glm::vec3 _C = glm::vec3(points[triangle.z],0);
+	glm::vec3 _D = glm::vec3(point,0);
 
-	float detT = glm::determinant(glm::mat3(glm::vec3(A.x, A.y, 1), glm::vec3(B.x, B.y, 1), glm::vec3(C.x, C.y, 1)));
 
-	float a = glm::length2(glm::vec2(B.x, B.y) - glm::vec2(C.x, C.y));
-	float b = glm::length2(glm::vec2(C.x, C.y) - glm::vec2(A.x, A.y));
-	float c = glm::length2(glm::vec2(A.x, A.y) - glm::vec2(B.x, B.y));
+	glm::mat4 m({
+		_A.x,_A.y,std::pow(_A.x,2) + std::pow(_A.y,2),1,
+		_D.x,_D.y,std::pow(_D.x,2) + std::pow(_D.y,2),1,
+		_C.x,_C.y,std::pow(_C.x,2) + std::pow(_C.y,2),1,
+		_B.x,_B.y,std::pow(_B.x,2) + std::pow(_B.y,2),1
+		});
 
-	glm::vec2 center;
-	center.x = (a * A.x + b * B.x + c * C.x) / (2 * detT);
-	center.y = (a * A.y + b * B.y + c * C.y) / (2 * detT);
 
-	float radiusSquared = glm::length2(center - glm::vec2(A.x, A.y));
-
-	float pointDistanceSquared = glm::length2(point - center);
-
-	return pointDistanceSquared <= radiusSquared;
+	return glm::determinant(m) > 0;
 }
 
 void edgeFlip(std::vector<glm::uvec2>& edges, std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points) 
