@@ -22,6 +22,16 @@ glm::vec3 GeomManager::directionToRotation(glm::vec3 direction)
 	return glm::degrees(glm::eulerAngles(quaternion));
 }
 
+void GeomManager::updateSegment(glm::vec2 p1, glm::vec2 p2, Model* m)
+{
+	glm::vec2 pos = (p1 + p2) / 2.0f;
+	float scale = glm::distance(p1, p2);
+	m->setPosition(glm::vec3(pos.x, 0.0f, pos.y));
+	m->setScale(glm::vec3(scale, m_size, m_size));
+	glm::vec2 direction = p2 - p1;
+	m->setEulerAngles(directionToRotation(glm::vec3(direction.x, 0.0f, direction.y)));	
+}
+
 Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2,Materials * mat)
 {
 	glm::vec2 pos = (p1 + p2) / 2.0f;
@@ -453,26 +463,122 @@ struct VoronoiEdge {
 	}
 };
 
-
-std::vector<VoronoiEdge> calculateVoronoiDiagram(const std::vector<Triangle>& delaunayTriangles)
+bool point_in_triangle(glm::vec2 p, glm::vec2 a, glm::vec2 b, glm::vec2 c) 
 {
-	std::vector<VoronoiEdge> voronoiEdges;
-	for (const auto& triangle : delaunayTriangles) 
-	{
-		glm::vec2 circumcenter = calculateCircumcenter(*triangle.x, *triangle.y, *triangle.z);
+	double alpha = ((b.y - c.y) * (p.x - c.x) + (c.x - b.x) * (p.y - c.y)) /
+		((b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y));
+	double beta = ((c.y - a.y) * (p.x - c.x) + (a.x - c.x) * (p.y - c.y)) /
+		((b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y));
+	double gamma = 1.0 - alpha - beta;
 
+	return (alpha > 0 && beta > 0 && gamma > 0);
+}
+
+bool sameEdge(glm::vec2 a, glm::vec2 b, glm::vec2 x, glm::vec2 y)
+{
+	return almost_equal(a, x) && almost_equal(b, y) || almost_equal(b, x) && almost_equal(a, y);
+}
+
+int GetIndexFromTriangle(const std::vector<Triangle>& delaunayTriangles,glm::vec2 * e1, glm::vec2* e2,int ignore)
+{	
+	for (int i = 0 ; i < delaunayTriangles.size();i++)
+	{
+		if (ignore == i)
+		{
+			continue;
+		}
+		if (
+			delaunayTriangles[i].x == e1 && delaunayTriangles[i].y == e2
+			|| delaunayTriangles[i].x == e2 && delaunayTriangles[i].y == e1
+
+			|| delaunayTriangles[i].y == e1 && delaunayTriangles[i].z == e2
+			|| delaunayTriangles[i].y == e2 && delaunayTriangles[i].z == e1
+
+			|| delaunayTriangles[i].z == e1 && delaunayTriangles[i].x == e2
+			|| delaunayTriangles[i].z == e2 && delaunayTriangles[i].x == e1
+
+			)
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+std::vector<VoronoiEdge> GeomManager::calculateVoronoiDiagram(const std::vector<Triangle>& delaunayTriangles, std::vector<glm::vec2> points2d)
+{	
+	std::vector<VoronoiEdge> voronoiEdges;
+	std::vector<glm::vec2> circumcenterTriangle;
+	for (const auto& triangle : delaunayTriangles) 
+	{		
+		glm::vec2 circumcenter = calculateCircumcenter(*triangle.x, *triangle.y, *triangle.z);
+		circumcenterTriangle.push_back(circumcenter);
+	}
+	int count = 0;
+	for (const auto& triangle : delaunayTriangles)
+	{
 		glm::vec2 midpointXY = 0.5f * (*triangle.x + *triangle.y);
 		glm::vec2 midpointYZ = 0.5f * (*triangle.y + *triangle.z);
 		glm::vec2 midpointZX = 0.5f * (*triangle.z + *triangle.x);
 
-		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointXY));
-		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointYZ));
-		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointZX));
-	}
+		int v = GetIndexFromTriangle(delaunayTriangles, triangle.x, triangle.y, count);
+		voronoiEdges.push_back(VoronoiEdge(circumcenterTriangle[count], v == -1 ? midpointXY : circumcenterTriangle[v]));
+		if (v == -1)
+		{
+			glm::vec2 dir = glm::normalize(voronoiEdges[voronoiEdges.size()-1].x - voronoiEdges[voronoiEdges.size() - 1].y);
+			glm::vec2 dir1 = glm::normalize(*triangle.z - *triangle.x);
+			glm::vec2 dir2 = glm::normalize(*triangle.z - *triangle.y);
+			if (glm::dot(dir1, dir2) > 0)
+			{
+				voronoiEdges[voronoiEdges.size() - 1].x = circumcenterTriangle[count];
+				voronoiEdges[voronoiEdges.size() - 1].y = voronoiEdges[voronoiEdges.size() - 1].x - dir * 1000.0f;
 
+			}
+			else
+			{
+				voronoiEdges[voronoiEdges.size() - 1].y += dir * 1000.0f;
+			}
+		}
+		v = GetIndexFromTriangle(delaunayTriangles, triangle.y, triangle.z, count);
+		voronoiEdges.push_back(VoronoiEdge(circumcenterTriangle[count], v == -1 ? midpointYZ : circumcenterTriangle[v]));
+		if (v == -1)
+		{
+			glm::vec2 dir = glm::normalize(voronoiEdges[voronoiEdges.size() - 1].x - voronoiEdges[voronoiEdges.size() - 1].y);
+			glm::vec2 dir1 = glm::normalize(*triangle.x - *triangle.y);
+			glm::vec2 dir2 = glm::normalize(*triangle.x - *triangle.z);
+			if (glm::dot(dir1, dir2) > 0)
+			{
+				voronoiEdges[voronoiEdges.size() - 1].x = circumcenterTriangle[count];
+				voronoiEdges[voronoiEdges.size() - 1].y = voronoiEdges[voronoiEdges.size() - 1].x - dir * 1000.0f;
+
+			}
+			else
+			{
+				voronoiEdges[voronoiEdges.size() - 1].y += dir * 1000.0f;
+			}
+		}
+		v = GetIndexFromTriangle(delaunayTriangles, triangle.z, triangle.x, count);
+		voronoiEdges.push_back(VoronoiEdge(circumcenterTriangle[count], v == -1 ? midpointZX : circumcenterTriangle[v]));
+		if (v == -1)
+		{
+			glm::vec2 dir = glm::normalize(voronoiEdges[voronoiEdges.size() - 1].x - voronoiEdges[voronoiEdges.size() - 1].y);
+			glm::vec2 dir1 = glm::normalize(*triangle.y - *triangle.z);
+			glm::vec2 dir2 = glm::normalize(*triangle.y - *triangle.x);
+			if (glm::dot(dir1, dir2) > 0)
+			{
+				voronoiEdges[voronoiEdges.size() - 1].x = circumcenterTriangle[count];
+				voronoiEdges[voronoiEdges.size() - 1].y = voronoiEdges[voronoiEdges.size() - 1].x - dir * 1000.0f;
+
+			}
+			else
+			{
+				voronoiEdges[voronoiEdges.size() - 1].y += dir * 1000.0f;
+			}
+		}
+		count++;
+	}
 	return voronoiEdges;
 }
-
 
 void GeomManager::DelaunayNoyauxTriangulation()
 {
@@ -741,6 +847,94 @@ void GeomManager::Triangulation2D()
 	}
 }
 
+std::vector<glm::uvec2> GeomManager::grahamScan(std::vector<glm::vec2> point2D)
+{
+	std::vector<glm::uvec2> result;
+	std::vector<int> buffer2D;
+	std::vector<int> order;
+	for (int i = 0; i < point2D.size(); i++)
+	{		
+		buffer2D.push_back(i);
+	}
+
+	glm::vec2 barycentre = glm::vec2(0);
+	for (int i = 0; i < point2D.size(); i++)
+	{
+		barycentre += point2D[i];
+	}
+	barycentre /= point2D.size();
+	glm::vec2 v = barycentre + glm::vec2(1, 0);
+	float angleMin = getAngle(v, point2D[buffer2D[0]] - barycentre);
+	float lenghtMin = glm::length(barycentre - point2D[buffer2D[0]]);
+	int iNew = 0;
+	for (int i = 1; i < buffer2D.size(); i++)
+	{
+		float angle = getAngle(v, point2D[buffer2D[i]] - barycentre);
+		if (angleMin > angle || (angleMin == angle && lenghtMin > glm::length(barycentre - point2D[buffer2D[i]])))
+		{
+			angleMin = angle;
+			lenghtMin = glm::length(barycentre - point2D[buffer2D[i]]);
+			iNew = i;
+		}
+	}
+	order.push_back(buffer2D[iNew]);
+	buffer2D.erase(buffer2D.begin() + iNew);
+	while (buffer2D.size() > 0)
+	{
+		angleMin = getAngle(v, point2D[buffer2D[0]] - barycentre);
+		lenghtMin = glm::length(barycentre - point2D[buffer2D[0]]);
+		iNew = 0;
+		for (int i = 1; i < buffer2D.size(); i++)
+		{
+
+			float angle = getAngle(v, point2D[buffer2D[i]] - barycentre);
+			if (angleMin > angle || (angleMin == angle && lenghtMin > glm::length(barycentre - point2D[buffer2D[i]])))
+			{
+				angleMin = angle;
+				lenghtMin = glm::length(barycentre - point2D[buffer2D[i]]);
+				iNew = i;
+
+			}
+		}
+		order.push_back(buffer2D[iNew]);
+		buffer2D.erase(buffer2D.begin() + iNew);
+	}
+	circular_doubly_linked_list cdll1;
+	for (int i = 0; i < order.size(); i++)
+	{
+		cdll1.append_node(order[i]);
+	}
+	auto s = cdll1.head;
+	auto pivot = s;
+	bool next = false;
+	do
+	{
+		float crossProduct = (point2D[pivot->data].x - point2D[pivot->prev->data].x) * (point2D[pivot->next->data].y - point2D[pivot->data].y) -
+			(point2D[pivot->data].y - point2D[pivot->prev->data].y) * (point2D[pivot->next->data].x - point2D[pivot->data].x);
+		if (crossProduct >= 0.0f)
+		{
+			pivot = pivot->next;
+			next = true;
+		}
+		else
+		{
+			s = pivot->prev;
+			cdll1.delete_node(pivot);
+			pivot = s;
+			next = false;
+		}
+		Debug::Log("%d", pivot->data);
+	} while (pivot != s || next == false);
+	Node* tmp = cdll1.head;
+	while (tmp->next != cdll1.head)
+	{
+		result.push_back(glm::uvec2(tmp->data, tmp->next->data));
+		tmp = tmp->next;		
+	}
+	result.push_back(glm::uvec2(tmp->data, tmp->next->data));
+	return result;
+}
+
 void GeomManager::grahamScan()
 {
 	for (int i = 0; i < m_segments.size(); i++)
@@ -917,11 +1111,13 @@ void GeomManager::Voronoi()
 	{
 		t.push_back(Triangle(&point2d[currentTriangle[i].x], &point2d[currentTriangle[i].y], &point2d[currentTriangle[i].z]));
 	}
-	std::vector<VoronoiEdge> voronoipoint = calculateVoronoiDiagram(t);
+	std::vector<VoronoiEdge> voronoipoint = calculateVoronoiDiagram(t, point2d);
 	Debug::Log("voronoi %d", t.size());
 	for (int i = 0; i < voronoipoint.size(); i++)
 	{
-		m_segments.push_back(createSegment(voronoipoint[i].x, voronoipoint[i].y, m_segmentMat2));
+		Model* m = createSegment(voronoipoint[i].x, voronoipoint[i].y, m_segmentMat2);
+		m_segments.push_back(m);
+		m_segmentsVoronoi.push_back(m);
 	}
 }
 
@@ -1002,6 +1198,7 @@ void GeomManager::update()
 			m_pc.modelManager->destroyModel(m_segments[i]);
 		}
 		m_segments.clear();
+		m_segmentsVoronoi.clear();
 		m_points_clouds.clear();
 		m_points_light_clouds.clear();
 		currentTriangle.clear();
@@ -1056,7 +1253,32 @@ void GeomManager::update()
 		}
 	}
 
-
+	if (m_moveVoronoi)
+	{
+		if (m_points_clouds.size() > 2)
+		{
+			std::vector<Triangle> t;
+			std::vector<glm::vec2> point2d;
+			for (int i = 0; i < m_points_clouds.size(); i++)
+			{
+				point2d.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+			}
+			for (int i = 0; i < point2d.size(); i++)
+			{
+				point2d[i].x += glm::sin(m_pc.time->getTime()+ point2d[i].y)*0.5f;
+				//point2d[i].y += glm::sin(m_pc.time->getTime());
+			}
+			for (int i = 0; i < currentTriangle.size(); i++)
+			{
+				t.push_back(Triangle(&point2d[currentTriangle[i].x], &point2d[currentTriangle[i].y], &point2d[currentTriangle[i].z]));
+			}
+			std::vector<VoronoiEdge> voronoipoint = calculateVoronoiDiagram(t, point2d);
+			for (int i = 0; i < voronoipoint.size(); i++)
+			{				
+				updateSegment(voronoipoint[i].x, voronoipoint[i].y, m_segmentsVoronoi[i]);
+			}
+		}
+	}
 }
 
 void GeomManager::stop()
@@ -1107,7 +1329,7 @@ void GeomManager::render(VulkanMisc* vM)
 				m_convexHullChange = true;
 				m_delaunayNoyaux = false;
 				m_delaunayNoyauxCheck = false;
-			}
+			}			
 			if (ImGui::Checkbox("Create delaunay Noyaux", &m_delaunayNoyauxCheck))
 			{
 				m_delaunayNoyaux = true;
@@ -1115,7 +1337,10 @@ void GeomManager::render(VulkanMisc* vM)
 				m_convexHullCheck = false;
 				m_convexHull = false;
 			}			
+			if (ImGui::Checkbox("Move Voronoi", &m_moveVoronoi))
+			{
 
+			}
 			if (ImGui::Button("Marche de Jarvis"))
 			{
 				m_marcheJarvis = true;

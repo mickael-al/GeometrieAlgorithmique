@@ -8,6 +8,7 @@
 #include <vector>
 
 struct Triangle;
+struct VoronoiEdge;
 
 class GeomManager : public ImguiBlock, public Behaviour
 {
@@ -21,6 +22,9 @@ public:
 	void preRender(VulkanMisc* vM);
 	void render(VulkanMisc* vM);
 	Model* createSegment(glm::vec2 p1, glm::vec2 p2, Materials* mat = nullptr);
+	void updateSegment(glm::vec2 p1, glm::vec2 p2, Model* m);
+	std::vector<glm::uvec2> grahamScan(std::vector<glm::vec2> point2D);
+	std::vector<VoronoiEdge> calculateVoronoiDiagram(const std::vector<Triangle>& delaunayTriangles, std::vector<glm::vec2> points2d);
 	glm::vec3 directionToRotation(glm::vec3 direction);
 	float getAngle(glm::vec2 a, glm::vec2 b);
 	void marcheJarvis();
@@ -39,6 +43,7 @@ private:
 	bool m_cameraChange = false;
 	bool m_planeShowHide = false;
 	bool m_convexHullChange = false;
+	bool m_moveVoronoi = false;
 	bool m_delaunayNoyaux = false;
 	bool m_convexHullCheck = true;
 	bool m_delaunayNoyauxCheck = false;
@@ -67,6 +72,7 @@ private:
 	std::vector<PointLight*> m_points_light_clouds;
 
 	std::vector<Model*> m_segments;
+	std::vector<Model*> m_segmentsVoronoi;
 	std::vector<glm::uvec3> currentTriangle;
 
 	ShapeBuffer* m_sb = nullptr;
