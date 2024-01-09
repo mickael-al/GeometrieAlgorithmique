@@ -22,12 +22,12 @@ glm::vec3 GeomManager::directionToRotation(glm::vec3 direction)
 	return glm::degrees(glm::eulerAngles(quaternion));
 }
 
-Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2)
+Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2,Materials * mat)
 {
 	glm::vec2 pos = (p1 + p2) / 2.0f;
 	float scale = glm::distance(p1, p2);
 	Model* m = m_pc.modelManager->createModel(m_sb);
-	m->setMaterial(m_segmentMat);
+	m->setMaterial(mat == nullptr ? m_segmentMat : mat);
 	m->setPosition(glm::vec3(pos.x, 0.0f, pos.y));
 	m->setScale(glm::vec3(scale, m_size, m_size));
 	glm::vec2 direction = p2 - p1;
@@ -115,19 +115,423 @@ bool isInCircumcircle(const glm::vec2& point, const std::vector<glm::vec2>& poin
 
 void edgeFlip(std::vector<glm::uvec2>& edges, std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points) 
 {
+	std::set<unsigned int> uniqueIndices;
 	for (int i = 0; i < triangles.size(); i++)
 	{
-		for (int j = 0; j < points.size(); j++)
-		{
-			if (j != triangles[i].x && j!= triangles[i].y && j != triangles[i].z && isInCircumcircle(points[j], points, triangles[i]))
+		for (int j = 0; j < triangles.size(); j++)
+		{			
+			uniqueIndices.clear();
+			uniqueIndices.insert(triangles[i].x);
+			uniqueIndices.insert(triangles[i].y);
+			uniqueIndices.insert(triangles[i].z);
+			uniqueIndices.insert(triangles[j].x);
+			uniqueIndices.insert(triangles[j].y);
+			uniqueIndices.insert(triangles[j].z);
+			if (uniqueIndices.size() == 4)
 			{
-				Debug::Log("P: %d T: %d %d %d",j, triangles[i].x, triangles[i].y, triangles[i].z);
+				uniqueIndices.clear();
+				uniqueIndices.insert(triangles[i].x);
+				uniqueIndices.insert(triangles[i].y);
+				uniqueIndices.insert(triangles[i].z);
+				int fp = 0;				
+				for (int k = 0; k < 3; k++)
+				{
+					if (std::find(uniqueIndices.begin(), uniqueIndices.end(), triangles[j][k]) == uniqueIndices.end())
+					{
+						fp = triangles[j][k];
+						k = 3;
+					}
+				}
+				if (isInCircumcircle(points[fp], points, triangles[i]))
+				{
+					uniqueIndices.clear();
+					uniqueIndices.insert(triangles[j].x);
+					uniqueIndices.insert(triangles[j].y);
+					uniqueIndices.insert(triangles[j].z);
+					int fp2 = 0;
+					for (int k = 0; k < 3; k++)
+					{
+						if (std::find(uniqueIndices.begin(), uniqueIndices.end(), triangles[i][k]) == uniqueIndices.end())
+						{
+							fp2 = triangles[i][k];
+							k = 3;
+						}
+					}
+					uniqueIndices.erase(fp);					
+					auto it = uniqueIndices.begin();
+					triangles[i] = glm::uvec3(fp, fp2,*it);
+					it++;
+					triangles[j] = glm::uvec3(fp2, fp,*it);
+				}
 			}
 		}
 	}
 }
 
-void GeomManager::DelaunayTriangulation2D()
+
+void edgeFlip2(std::vector<glm::uvec2>& edges, std::vector<glm::uvec3>& triangles, const std::vector<glm::vec2>& points)
+{
+	std::set<unsigned int> uniqueIndices;
+	for (int i = triangles.size()-1; i < triangles.size(); i++)
+	{
+		for (int j = 0; j < triangles.size(); j++)
+		{
+			uniqueIndices.clear();
+			uniqueIndices.insert(triangles[i].x);
+			uniqueIndices.insert(triangles[i].y);
+			uniqueIndices.insert(triangles[i].z);
+			uniqueIndices.insert(triangles[j].x);
+			uniqueIndices.insert(triangles[j].y);
+			uniqueIndices.insert(triangles[j].z);
+			if (uniqueIndices.size() == 4)
+			{
+				uniqueIndices.clear();
+				uniqueIndices.insert(triangles[i].x);
+				uniqueIndices.insert(triangles[i].y);
+				uniqueIndices.insert(triangles[i].z);
+				int fp = 0;
+				for (int k = 0; k < 3; k++)
+				{
+					if (std::find(uniqueIndices.begin(), uniqueIndices.end(), triangles[j][k]) == uniqueIndices.end())
+					{
+						fp = triangles[j][k];
+						k = 3;
+					}
+				}
+				if (isInCircumcircle(points[fp], points, triangles[i]))
+				{
+					uniqueIndices.clear();
+					uniqueIndices.insert(triangles[j].x);
+					uniqueIndices.insert(triangles[j].y);
+					uniqueIndices.insert(triangles[j].z);
+					int fp2 = 0;
+					for (int k = 0; k < 3; k++)
+					{
+						if (std::find(uniqueIndices.begin(), uniqueIndices.end(), triangles[i][k]) == uniqueIndices.end())
+						{
+							fp2 = triangles[i][k];
+							k = 3;
+						}
+					}
+					uniqueIndices.erase(fp);
+					auto it = uniqueIndices.begin();
+					triangles[i] = glm::uvec3(fp, fp2, *it);
+					it++;
+					triangles[j] = glm::uvec3(fp2, fp, *it);
+					break;
+				}
+			}
+		}
+	}
+}
+
+bool almost_equal(float x, float y, int ulp = 2)
+{
+	return fabsf(x - y) <= std::numeric_limits<float>::epsilon() * fabsf(x + y) * static_cast<float>(ulp)
+		|| fabsf(x - y) < std::numeric_limits<float>::min();
+}
+
+bool almost_equal(const glm::vec2& v1, const glm::vec2& v2)
+{
+	return almost_equal(v1.x, v2.x) && almost_equal(v1.y, v2.y);
+}
+
+struct Triangle {
+	glm::vec2 * x;
+	glm::vec2 * y;
+	glm::vec2 * z;
+	bool isBad;	
+
+	Triangle(glm::vec2* tx, glm::vec2* ty, glm::vec2* tz)
+	{
+		x = tx;
+		y = ty;
+		z = tz;
+		isBad = false;
+	}
+
+	float norm2(const glm::vec2 &p) const
+	{
+		return p.x * p.x + p.y * p.y;
+	}
+
+	float dist2(const glm::vec2 &v1, const glm::vec2& v2) const
+	{
+		float dx = v1.x - v2.x;
+		float dy = v1.y - v2.y;
+		return dx * dx + dy * dy;
+	}
+
+	bool containsVertex(const glm::vec2& v) const
+	{
+		// return p1 == v || p2 == v || p3 == v;
+		return almost_equal(*x, v) || almost_equal(*y, v) || almost_equal(*z, v);
+	}
+
+	bool circumCircleContains(const glm::vec2& v) const
+	{
+		float ab = norm2(*x);
+		float cd = norm2(*y);
+		float ef = norm2(*z);
+
+		float ax = x->x;
+		float ay = x->y;
+		float bx = y->x;
+		float by = y->y;
+		float cx = z->x;
+		float cy = z->y;
+
+		float circum_x = (ab * (cy - by) + cd * (ay - cy) + ef * (by - ay)) / (ax * (cy - by) + bx * (ay - cy) + cx * (by - ay));
+		float circum_y = (ab * (cx - bx) + cd * (ax - cx) + ef * (bx - ax)) / (ay * (cx - bx) + by * (ax - cx) + cy * (bx - ax));
+
+		glm::vec2 circum(circum_x / 2, circum_y / 2);
+		float circum_radius = dist2(*x,circum);
+		float dist = dist2(v,circum);
+		return dist <= circum_radius;
+	}
+};
+
+struct Edge
+{
+	glm::vec2* x;
+	glm::vec2* y;
+	bool isBad;
+	Edge(glm::vec2* ex, glm::vec2* ey)
+	{
+		x = ex;
+		y = ey;
+		isBad = false;
+	}
+};
+
+bool almost_equal(const Edge& e1, const Edge& e2)
+{
+	return	(almost_equal(*e1.x, *e2.x) && almost_equal(*e1.y, *e2.y)) ||
+		(almost_equal(*e1.x, *e2.y) && almost_equal(*e1.y, *e2.x));
+}
+
+std::vector<Triangle> calculateDelaunayTriangulation(std::vector<Triangle> triangles,std::vector<glm::vec2>& points)
+{
+	// Créer un super-triangle contenant tous les points
+	float minX = points[0].x, minY = points[0].y;
+	float maxX = points[0].x, maxY = points[0].y;
+
+	for (size_t i = 1; i < points.size(); ++i) 
+	{
+		minX = std::min(minX, points[i].x);
+		minY = std::min(minY, points[i].y);
+		maxX = std::max(maxX, points[i].x);
+		maxY = std::max(maxY, points[i].y);
+	}
+
+	float dx = maxX - minX;
+	float dy = maxY - minY;
+	float deltaMax = std::max(dx, dy);
+	float midx = (minX + maxX) / 2.0f;
+	float midy = (minY + maxY) / 2.0f;
+
+	glm::vec2 p1(midx - 20.0f * deltaMax, midy - deltaMax);
+	glm::vec2 p2(midx, midy + 20.0f * deltaMax);
+	glm::vec2 p3(midx + 20.0f * deltaMax, midy - deltaMax);
+	for (auto& t : triangles)
+	{
+		t.isBad = false;
+	}
+	if (triangles.size() == 0)
+	{
+		triangles.push_back(Triangle(&p1, &p2, &p3));
+	}
+
+	for (int i = 0; i < points.size(); i++)
+	{
+		std::vector<Edge> polygon;
+
+		for (auto& t : triangles)
+		{
+			if (t.circumCircleContains(points[i]))
+			{
+				t.isBad = true;
+				polygon.push_back(Edge(t.x,t.y));
+				polygon.push_back(Edge(t.y, t.z));
+				polygon.push_back(Edge(t.z, t.x));
+			}
+		}
+
+		triangles.erase(std::remove_if(begin(triangles), end(triangles), [](Triangle& t) {
+			return t.isBad;
+			}), end(triangles));
+
+		for (auto e1 = begin(polygon); e1 != end(polygon); ++e1)
+		{
+			for (auto e2 = e1 + 1; e2 != end(polygon); ++e2)
+			{
+				if (almost_equal(*e1, *e2))
+				{
+					e1->isBad = true;
+					e2->isBad = true;
+				}
+			}
+		}
+
+		polygon.erase(std::remove_if(begin(polygon), end(polygon), [](Edge& e) {
+			return e.isBad;
+			}), end(polygon));
+
+		for (const auto e : polygon)
+		{
+			triangles.push_back(Triangle(e.x, e.y, &points[i]));
+		}
+	}
+	
+	triangles.erase(std::remove_if(begin(triangles), end(triangles), [p1, p2, p3](Triangle& t) {
+		return t.containsVertex(p1) || t.containsVertex(p2) || t.containsVertex(p3);
+		}), end(triangles));
+
+	return triangles;
+}
+
+void addPointToDelaunayTriangulation(glm::vec2& newPoint, std::vector<Triangle>& triangles) {
+	std::vector<Edge> polygon;
+
+	for (auto& t : triangles) {
+		if (t.circumCircleContains(newPoint)) {
+			t.isBad = true;
+			polygon.push_back(Edge(t.x, t.y));
+			polygon.push_back(Edge(t.y, t.z));
+			polygon.push_back(Edge(t.z, t.x));
+		}
+	}
+
+	triangles.erase(std::remove_if(begin(triangles), end(triangles), [](Triangle& t) {
+		return t.isBad;
+		}), end(triangles));
+
+	for (auto e1 = begin(polygon); e1 != end(polygon); ++e1) {
+		for (auto e2 = e1 + 1; e2 != end(polygon); ++e2) {
+			if (almost_equal(*e1, *e2)) {
+				e1->isBad = true;
+				e2->isBad = true;
+			}
+		}
+	}
+
+	polygon.erase(std::remove_if(begin(polygon), end(polygon), [](Edge& e) {
+		return e.isBad;
+		}), end(polygon));
+
+	for (auto& e : polygon) {
+		triangles.push_back(Triangle(e.x, e.y, &newPoint));
+	}
+
+	triangles.erase(std::remove_if(begin(triangles), end(triangles), [&newPoint](Triangle& t) {
+		return t.containsVertex(newPoint);
+		}), end(triangles));
+}
+
+glm::vec2 calculateCircumcenter(const glm::vec2& A, const glm::vec2& B, const glm::vec2& C) {
+	float D = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
+	glm::vec2 circumcenter;
+
+	circumcenter.x = ((A.x * A.x + A.y * A.y) * (B.y - C.y) + (B.x * B.x + B.y * B.y) * (C.y - A.y) +
+		(C.x * C.x + C.y * C.y) * (A.y - B.y)) /
+		D;
+
+	circumcenter.y = ((A.x * A.x + A.y * A.y) * (C.x - B.x) + (B.x * B.x + B.y * B.y) * (A.x - C.x) +
+		(C.x * C.x + C.y * C.y) * (B.x - A.x)) /
+		D;
+
+	return circumcenter;
+}
+
+struct VoronoiEdge {
+	glm::vec2 x;
+	glm::vec2 y;
+	VoronoiEdge(glm::vec2 ex, glm::vec2 ey)
+	{		
+		x = ex;
+		y = ey;
+	}
+};
+
+
+std::vector<VoronoiEdge> calculateVoronoiDiagram(const std::vector<Triangle>& delaunayTriangles)
+{
+	std::vector<VoronoiEdge> voronoiEdges;
+	for (const auto& triangle : delaunayTriangles) 
+	{
+		glm::vec2 circumcenter = calculateCircumcenter(*triangle.x, *triangle.y, *triangle.z);
+
+		glm::vec2 midpointXY = 0.5f * (*triangle.x + *triangle.y);
+		glm::vec2 midpointYZ = 0.5f * (*triangle.y + *triangle.z);
+		glm::vec2 midpointZX = 0.5f * (*triangle.z + *triangle.x);
+
+		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointXY));
+		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointYZ));
+		voronoiEdges.push_back(VoronoiEdge(circumcenter, midpointZX));
+	}
+
+	return voronoiEdges;
+}
+
+
+void GeomManager::DelaunayNoyauxTriangulation()
+{
+	for (int i = 0; i < m_segments.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_segments[i]);
+	}
+	m_segments.clear();
+	std::vector<Triangle> t;
+	std::vector<glm::vec2> point2d;
+	if (true)
+	{				
+		currentTriangle.clear();
+		for (int i = 0; i < m_points_clouds.size(); i++)
+		{
+			point2d.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+		}
+		t = calculateDelaunayTriangulation(t, point2d);
+		currentTriangle.resize(t.size());
+		for (int i = 0; i < t.size(); i++)
+		{
+			for (int j = 0; j < point2d.size(); j++)
+			{				
+				if (t[i].x == &point2d[j])
+				{
+					currentTriangle[i].x = j;
+				}
+				if (t[i].y == &point2d[j])
+				{
+					currentTriangle[i].y = j;
+				}
+				if (t[i].z == &point2d[j])
+				{
+					currentTriangle[i].z = j;
+				}
+			}
+		}		
+	}
+	else
+	{		
+		for (int i = 0; i < m_points_clouds.size(); i++)
+		{
+			point2d.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+		}		
+		for (int i = 0; i < currentTriangle.size(); i++)
+		{
+			t.push_back(Triangle(&point2d[currentTriangle[i].x], &point2d[currentTriangle[i].y], &point2d[currentTriangle[i].z]));
+		}
+		t = calculateDelaunayTriangulation(t,point2d);
+	}
+	for (int i = 0; i < t.size(); i++)
+	{
+		m_segments.push_back(createSegment(*t[i].x, *t[i].y));
+		m_segments.push_back(createSegment(*t[i].y, *t[i].z));
+		m_segments.push_back(createSegment(*t[i].z, *t[i].x));
+	}
+}
+
+void GeomManager::DelaunayTriangulation2DTest()
 {
 	for (int i = 0; i < m_segments.size(); i++)
 	{
@@ -139,7 +543,7 @@ void GeomManager::DelaunayTriangulation2D()
 	{
 		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
 	}
-
+	
 	std::sort(point2D.begin(), point2D.end(), [](const glm::vec2& a, const glm::vec2& b)
 		{
 			return a.x < b.x || (a.x == b.x && a.y < b.y);
@@ -177,54 +581,106 @@ void GeomManager::DelaunayTriangulation2D()
 		{
 			edges.push_back(new_edges[j]);
 		}
-	}
-
-	std::set<unsigned int> uniqueIndices;
-	for (int i = 0; i < edges.size(); i++)
-	{
-		for (int j = i + 1; j < edges.size(); j++)
+		
+		triangulation.clear();
+		std::set<unsigned int> uniqueIndices;
+		for (int i = 0; i < edges.size(); i++)
 		{
-			for (int k = j + 1; k < edges.size(); k++)
+			for (int j = i + 1; j < edges.size(); j++)
 			{
-				uniqueIndices.clear();
-				uniqueIndices.insert(edges[i].x);
-				uniqueIndices.insert(edges[i].y);
-				uniqueIndices.insert(edges[j].x);
-				uniqueIndices.insert(edges[j].y);
-				uniqueIndices.insert(edges[k].x);
-				uniqueIndices.insert(edges[k].y);
-
-				if (uniqueIndices.size() == 3)
+				for (int k = j + 1; k < edges.size(); k++)
 				{
-					auto it = uniqueIndices.begin();
-					glm::uvec3 trig;
-					trig.x = *it;
-					it++;
-					trig.y = *it;
-					it++;
-					trig.z = *it;
-					it++;
+					uniqueIndices.clear();
+					uniqueIndices.insert(edges[i].x);
+					uniqueIndices.insert(edges[i].y);
+					uniqueIndices.insert(edges[j].x);
+					uniqueIndices.insert(edges[j].y);
+					uniqueIndices.insert(edges[k].x);
+					uniqueIndices.insert(edges[k].y);
 
-					if (orientation(point2D[trig.x], point2D[trig.y], point2D[trig.z]) == 2)
+					if (uniqueIndices.size() == 3)
 					{
-						unsigned int temp = trig.y;
-						trig.y = trig.z;
-						trig.z = temp;
+						auto it = uniqueIndices.begin();
+						glm::uvec3 trig;
+						trig.x = *it;
+						it++;
+						trig.y = *it;
+						it++;
+						trig.z = *it;
+						it++;
+
+						if (orientation(point2D[trig.x], point2D[trig.y], point2D[trig.z]) == 2)
+						{
+							unsigned int temp = trig.y;
+							trig.y = trig.z;
+							trig.z = temp;
+						}
+						triangulation.push_back(trig);
 					}
-					triangulation.push_back(trig);
 				}
 			}
+		}				
+		if (triangulation.size() >= 2)
+		{
+			std::cout << edges.size() << " " << triangulation.size() << std::endl;
+			edgeFlip2(edges, triangulation, point2D);			
+			std::vector<glm::uvec2> nedges;
+			for (int r = 0; r < triangulation.size(); r++)
+			{
+				glm::uvec2 ind = glm::uvec2(triangulation[r].x >= triangulation[r].y ? triangulation[r].x : triangulation[r].y, triangulation[r].x < triangulation[r].y ? triangulation[r].x : triangulation[r].y);
+				if (std::find(nedges.begin(), nedges.end(), ind) == nedges.end())
+				{
+					nedges.push_back(ind);
+				}
+				ind = glm::uvec2(triangulation[r].y >= triangulation[r].z ? triangulation[r].y : triangulation[r].z, triangulation[r].y < triangulation[r].z ? triangulation[r].y : triangulation[r].z);
+				if (std::find(nedges.begin(), nedges.end(), ind) == nedges.end())
+				{
+					nedges.push_back(ind);
+				}
+				ind = glm::uvec2(triangulation[r].z >= triangulation[r].x ? triangulation[r].z : triangulation[r].x, triangulation[r].z < triangulation[r].x ? triangulation[r].z : triangulation[r].x);
+				if (std::find(nedges.begin(), nedges.end(), ind) == nedges.end())
+				{
+					nedges.push_back(ind);
+				}
+				//std::cout << ind.x << " " << ind.y << std::endl;
+			}
+			if (nedges.size() == edges.size())
+			{
+				edges = nedges;				
+			}
+			std::cout << edges.size() << " " << triangulation.size() << std::endl;
 		}
 	}
-	Debug::Log("Size: %d", triangulation.size());
-	edgeFlip(edges,triangulation, point2D);
 
-	
+
+
 	for (int i = 0; i < triangulation.size(); i++)
 	{
 		m_segments.push_back(createSegment(point2D[triangulation[i].x], point2D[triangulation[i].y]));
 		m_segments.push_back(createSegment(point2D[triangulation[i].y], point2D[triangulation[i].z]));
 		m_segments.push_back(createSegment(point2D[triangulation[i].z], point2D[triangulation[i].x]));
+	}
+}
+
+void GeomManager::DelaunayTriangulation2D()
+{
+	for (int i = 0; i < m_segments.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_segments[i]);
+	}
+	m_segments.clear();
+	std::vector<glm::vec2> point2D;
+	for (int i = 0; i < m_points_clouds.size(); i++)
+	{
+		point2D.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+	}
+	std::vector<Triangle> t;
+	std::vector<Triangle> triangles = calculateDelaunayTriangulation(t,point2D);
+	for (int i = 0; i < triangles.size(); i++)
+	{
+		m_segments.push_back(createSegment(*triangles[i].x, *triangles[i].y));
+		m_segments.push_back(createSegment(*triangles[i].y, *triangles[i].z));
+		m_segments.push_back(createSegment(*triangles[i].z, *triangles[i].x));
 	}
 }
 
@@ -449,6 +905,26 @@ void GeomManager::marcheJarvis()
 	m_segments.push_back(createSegment(point2D[order[order.size() - 1]], point2D[order[0]]));
 }
 
+void GeomManager::Voronoi()
+{
+	std::vector<Triangle> t;
+	std::vector<glm::vec2> point2d;
+	for (int i = 0; i < m_points_clouds.size(); i++)
+	{
+		point2d.push_back(glm::vec2(m_points_clouds[i]->getPosition().x, m_points_clouds[i]->getPosition().z));
+	}
+	for (int i = 0; i < currentTriangle.size(); i++)
+	{
+		t.push_back(Triangle(&point2d[currentTriangle[i].x], &point2d[currentTriangle[i].y], &point2d[currentTriangle[i].z]));
+	}
+	std::vector<VoronoiEdge> voronoipoint = calculateVoronoiDiagram(t);
+	Debug::Log("voronoi %d", t.size());
+	for (int i = 0; i < voronoipoint.size(); i++)
+	{
+		m_segments.push_back(createSegment(voronoipoint[i].x, voronoipoint[i].y, m_segmentMat2));
+	}
+}
+
 void GeomManager::start()
 {
 	m_pc = GameEngine::getPtrClass();
@@ -480,6 +956,12 @@ void GeomManager::start()
 	m_segmentMat->setMetallic(0.7f);
 	m_segmentMat->setRoughness(0.15f);
 	m_segmentMat->setPipeline(gp_unlit);
+
+	m_segmentMat2 = m_pc.materialManager->createMaterial();
+	m_segmentMat2->setColor(glm::vec3(0.0f, 1.0f, 0.0f));
+	m_segmentMat2->setMetallic(0.7f);
+	m_segmentMat2->setRoughness(0.15f);
+	m_segmentMat2->setPipeline(gp_unlit);
 }
 
 void GeomManager::fixedUpdate()
@@ -522,6 +1004,7 @@ void GeomManager::update()
 		m_segments.clear();
 		m_points_clouds.clear();
 		m_points_light_clouds.clear();
+		currentTriangle.clear();
 	}
 	if (m_cloudPoint && !m_priority && !m_isMouseOverUI)
 	{
@@ -558,6 +1041,11 @@ void GeomManager::update()
 					else
 					{
 						Triangulation2D();
+					}
+
+					if (m_delaunayNoyaux)
+					{
+						DelaunayNoyauxTriangulation();
 					}
 				}
 			}
@@ -617,7 +1105,16 @@ void GeomManager::render(VulkanMisc* vM)
 			if (ImGui::Checkbox("Create Convex Hull", &m_convexHullCheck))
 			{
 				m_convexHullChange = true;
+				m_delaunayNoyaux = false;
+				m_delaunayNoyauxCheck = false;
 			}
+			if (ImGui::Checkbox("Create delaunay Noyaux", &m_delaunayNoyauxCheck))
+			{
+				m_delaunayNoyaux = true;
+				m_convexHullChange = false;
+				m_convexHullCheck = false;
+				m_convexHull = false;
+			}			
 
 			if (ImGui::Button("Marche de Jarvis"))
 			{
@@ -640,6 +1137,28 @@ void GeomManager::render(VulkanMisc* vM)
 				if (m_points_clouds.size() > 2)
 				{
 					DelaunayTriangulation2D();
+				}
+			}
+			/*if (ImGui::Button("Delaunay Triangulation New 2D"))
+			{
+				if (m_points_clouds.size() > 2)
+				{
+					DelaunayTriangulation2DTest();
+				}
+			}*/
+			if (ImGui::Button("Delaunay Triangulation noyaux"))
+			{
+				if (m_points_clouds.size() > 2)
+				{
+					DelaunayNoyauxTriangulation();
+				}
+			}
+
+			if (ImGui::Button("Voronoi Diagram"))
+			{
+				if (m_points_clouds.size() > 2)
+				{
+					Voronoi();
 				}
 			}
 		}
