@@ -1734,16 +1734,6 @@ void GeomManager::render(VulkanMisc* vM)
 				m_delaunayNoyauxCheck = false;
 			}
 
-			if (ImGui::Checkbox("Create 3D Convex Hull", &m_convexHull3DCheck))
-			{
-				m_convexHullChange = false;
-				m_convexHullCheck = false;
-				m_convexHull3DChange = true;
-				m_convexHull = false;
-				m_delaunayNoyaux = false;
-				m_delaunayNoyauxCheck = false;
-			}
-
 			
 			if (ImGui::Checkbox("Create delaunay Noyaux", &m_delaunayNoyauxCheck))
 			{
