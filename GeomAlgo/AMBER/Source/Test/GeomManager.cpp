@@ -429,7 +429,7 @@ struct Face
 		edges.push_back(y);
 		edges.push_back(z);
 		list_Point = GetPoints();
-		std::cout << list_Point.size() << std::endl;
+		std::cout << "Face(si > 3 error) =" << list_Point.size() << std::endl;
 		centre = (*list_Point[0]->s + *list_Point[1]->s + *list_Point[2]->s) / 3.0f;
 	}
 
@@ -1298,12 +1298,56 @@ void GeomManager::Voronoi()
 	}
 }
 
+Edge3D* alreadyExist(const std::vector<Edge3D*>& edges, Edge3D* newEdge,bool * exist)
+{
+	for (int i = 0; i < edges.size(); i++)
+	{
+		if (almost_equal(*edges[i]->x->s, *newEdge->x->s) && almost_equal(*edges[i]->y->s, *newEdge->y->s) ||
+			almost_equal(*edges[i]->y->s, *newEdge->x->s) && almost_equal(*edges[i]->x->s, *newEdge->y->s))
+		{
+			std::cout << "AAA" << std::endl;
+			*exist = true;
+			return edges[i];
+		}
+	}
+	*exist = false;
+	return newEdge;
+}
+
+Face* alreadyExistFace(const std::vector<Face*>& faces, Face* newFace, bool* exist)
+{
+	for (int i = 0; i < faces.size(); i++)
+	{
+		if (faces[i]->x == newFace->x && faces[i]->y == newFace->y && faces[i]->z == newFace->z || 
+			faces[i]->x == newFace->x && faces[i]->y == newFace->z && faces[i]->z == newFace->y ||
+
+			faces[i]->x == newFace->y && faces[i]->y == newFace->z && faces[i]->z == newFace->x ||
+			faces[i]->x == newFace->y && faces[i]->y == newFace->x && faces[i]->z == newFace->z ||
+
+			faces[i]->x == newFace->z && faces[i]->y == newFace->x && faces[i]->z == newFace->y ||
+			faces[i]->x == newFace->z && faces[i]->y == newFace->y && faces[i]->z == newFace->x
+			)
+		{
+			std::cout << "BBB" << std::endl;
+			*exist = true;
+			return faces[i];
+		}
+	}
+	*exist = false;
+	return newFace;
+}
+
 void GeomManager::ConvexHull3D()
 {
 	for (int i = 0; i < m_segments.size(); i++)
 	{
 		m_pc.modelManager->destroyModel(m_segments[i]);
 	}
+	for (int i = 0; i < m_faceModel.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_faceModel[i]);
+	}
+	m_faceModel.clear();
 	m_segments.clear();
 	std::vector<Sommet3D*> sommets;
 	std::vector<glm::vec3> fdp;
@@ -1338,60 +1382,31 @@ void GeomManager::ConvexHull3D()
 		
 		for (int i = 4; i < m_points_clouds.size(); i++)
 		{
-
-			glm::vec3 bary = glm::vec3(0.0f);
-			int noInactive = 0;
-			for (int j = 0; j < faces.size(); j++)
-			{
-				if (!faces[j]->inactive)
-				{
-					for (int k = 0; k < faces[j]->list_Point.size(); k++)
-					{
-						bary.x += faces[j]->list_Point[k]->s->x;
-						bary.y += faces[j]->list_Point[k]->s->y;
-						bary.z += faces[j]->list_Point[k]->s->z;
-					}
-				}
-				else
-				{
-					noInactive++;
-				}
-			}
-			bary = bary / float((faces.size()*3.0f) - (noInactive*3.0f));
-			for (int j = 0; j < faces.size(); j++)
-			{
-				if (!faces[j]->inactive)
-				{
-					glm::vec3 normal = faces[j]->Normal(bary);
-					glm::vec3 dir = glm::normalize(faces[j]->centre - m_points_clouds[i]->getPosition());
-					if (glm::dot(normal, dir) < 0)
-					{
-						faces[j]->color = BLEU;
-					}
-				}
-			}
-
-			/*for (int j = 0; j < tetra.size(); j++)
-			{
-				for (int k = 0; k < tetra[j]->faces.size(); k++)
-				{
-					if (!tetra[j]->faces[k]->inactive)
-					{
-						glm::vec3 normal = tetra[j]->faces[k]->Normal(tetra[j]->bary);
-						glm::vec3 dir = glm::normalize(tetra[j]->faces[k]->centre - m_points_clouds[i]->getPosition());
-						if (glm::dot(normal, dir) < 0)
-						{
-							tetra[j]->faces[k]->color = BLEU;
-						}
-					}
-				}
-			}*/
 			for (int j = 0; j < edges.size(); j++)
 			{
 				if (edges[j]->color != BLEU)
 				{
 					edges[j]->color = ROUGE;
 				}
+			}
+
+			for (int j = 0; j < tetra.size(); j++)
+			{
+				for (int k = 0; k < tetra[j]->faces.size(); k++)
+				{
+					if (!tetra[j]->faces[k]->inactive)
+					{
+						glm::vec3 normal = tetra[j]->faces[k]->Normal(tetra[j]->bary);
+						glm::vec3 dir = glm::normalize(tetra[j]->faces[k]->centre - *sommets[i]->s);
+						if (glm::dot(normal, dir) < 0)
+						{
+							tetra[j]->faces[k]->color = BLEU;
+						}
+					}
+				}
+			}
+			for (int j = 0; j < edges.size(); j++)
+			{
 				int count = 0;
 				for (int k = 0; k < edges[j]->faces.size(); k++)
 				{
@@ -1399,69 +1414,81 @@ void GeomManager::ConvexHull3D()
 					{
 						count++;
 						edges[j]->color = VIOLET;
-						if (count == 2)
+						if (count >= 2)
 						{
 							edges[j]->color = BLEU;
 						}
 					}
 				}
-				/*if (edges[j]->color == BLEU)
-				{
-					for (int k = 0; k < edges[j]->points.size(); k++)
-					{
-						edges[j]->points[k]->color = BLEU;
-					}
-				}
-				if (edges[j]->color == VIOLET)
-				{
-					for (int k = 0; k < edges[j]->points.size(); k++)
-					{
-						edges[j]->points[k]->color = VIOLET;
-					}
-				}*/
 			}
-
-			/*for (int j = 0; j < faces.size(); j++)
-			{
-				if (faces[j]->color == BLEU && !faces[j]->inactive)
-				{
-					for (int k = 0; k < faces[j]->edges.size(); k++)
-					{
-						faces[j]->edges[k]->color++;
-					}
-				}
-			}*/
 
 			for (int j = 0; j < faces.size(); j++)
 			{
 				if (faces[j]->color == BLEU && !faces[j]->inactive)
 				{
-					std::vector<Face*> newFaces;
-					std::vector<Edge3D*> newEdges;
-					newEdges.push_back(new Edge3D(faces[j]->list_Point[0], sommets[i]));
-					newEdges.push_back(new Edge3D(faces[j]->list_Point[1], sommets[i]));
-					newEdges.push_back(new Edge3D(faces[j]->list_Point[2], sommets[i]));
+					bool exist1, exist2, exist3;
+					std::vector<Edge3D*> nedges;
+					std::vector<Face*> nfaces;
+					Edge3D * e1 = alreadyExist(edges, new Edge3D(faces[j]->list_Point[0], sommets[i]), &exist1);
+					Edge3D * e2 = alreadyExist(edges, new Edge3D(faces[j]->list_Point[1], sommets[i]), &exist2);
+					Edge3D * e3 = alreadyExist(edges, new Edge3D(faces[j]->list_Point[2], sommets[i]), &exist3);
+					nedges.push_back(e1);
+					nedges.push_back(e2);
+					nedges.push_back(e3);
+					bool fexist1, fexist2, fexist3;
+					for (int s = 0; s < 3; s++)//faces
+					{
+						for (int k = 0; k < 3; k++)
+						{
+							for (int l = 0; l < 3; l++)
+							{
+								if (k != l)
+								{
+									Face* currentface = new Face(faces[j]->edges[s], nedges[k], nedges[l]);
+									if (currentface->list_Point.size() == 3)
+									{
+										nfaces.push_back(currentface);
+										l = 3;
+										k = 3;
+									}
+									else
+									{
+										delete currentface;
+									}
+								}
+							}
+						}
+					}
 
-					newFaces.push_back(new Face(faces[j]->edges[0], newEdges[0], newEdges[1]));
-					newFaces.push_back(new Face(faces[j]->edges[1], newEdges[1], newEdges[2]));
-					newFaces.push_back(new Face(faces[j]->edges[2], newEdges[2], newEdges[0]));
+					Face * f1 = alreadyExistFace(faces, nfaces[0], &fexist1);
+					Face * f2 = alreadyExistFace(faces, nfaces[1], &fexist2);
+					Face * f3 = alreadyExistFace(faces, nfaces[2], &fexist3);
 					if (faces[j]->edges[0]->color >= BLEU)
 					{
-						newFaces[0]->inactive = true;
+						f1->inactive = true;
 					}
 					if (faces[j]->edges[1]->color >= BLEU)
 					{
-						newFaces[1]->inactive = true;
+						f2->inactive = true;
 					}
 					if (faces[j]->edges[2]->color >= BLEU)
 					{
-						newFaces[2]->inactive = true;
+						f3->inactive = true;
 					}
-					edges.insert(edges.end(), newEdges.begin(), newEdges.end());
+					if (!exist1) { edges.push_back(e1); }
+					if (!exist2) { edges.push_back(e2); }
+					if (!exist3) { edges.push_back(e3); }
+					if (!fexist1) { faces.push_back(f1); }
+					if (!fexist2) { faces.push_back(f2); }
+					if (!fexist3) { faces.push_back(f3); }
+
 					faces[j]->inactive = true;
-					tetra.push_back(new Tetra(faces[j], newFaces[0], newFaces[1], newFaces[2]));
-					faces.insert(faces.end(), newFaces.begin(), newFaces.end());
-					
+					tetra.push_back(new Tetra(faces[j], f1, f2, f3));
+					/*for (int s = 0; s < tetra[tetra.size() - 1]->faces.size(); s++)
+					{
+						glm::vec3 normal = tetra[tetra.size() - 1]->faces[s]->Normal(tetra[tetra.size() - 1]->bary);
+						m_segments.push_back(createSegment3D(tetra[tetra.size() - 1]->faces[s]->centre, tetra[tetra.size() - 1]->faces[s]->centre+ normal*5.0f, m_segmentMat2));
+					}*/
 				}
 			}
 
@@ -1471,15 +1498,17 @@ void GeomManager::ConvexHull3D()
 		{
 			for (int k = 0; k < tetra[j]->faces.size(); k++)
 			{
-				//if (!tetra[j]->faces[k]->inactive)
-				{
-					for (int l = 0; l < tetra[j]->faces[k]->edges.size(); l++)
+				for (int l = 0; l < tetra[j]->faces[k]->edges.size(); l++)
+				{					
+					m_segments.push_back(createSegment3D(*tetra[j]->faces[k]->edges[l]->x->s, *tetra[j]->faces[k]->edges[l]->y->s, tetra[j]->faces[k]->edges[l]->color >= BLEU ? m_pointMat : tetra[j]->faces[k]->edges[l]->color == VIOLET ? m_segmentMat3 : m_segmentMat));
+					/*if (l == 0)
 					{
-						m_segments.push_back(createSegment3D(*tetra[j]->faces[k]->edges[l]->x->s, *tetra[j]->faces[k]->edges[l]->y->s, tetra[j]->faces[k]->edges[l]->color >= BLEU ? m_pointMat : tetra[j]->faces[k]->edges[l]->color == VIOLET ? m_segmentMat3 : m_segmentMat));
-					}
-				}
+						m_faceModel.push_back(createTriangle((*tetra[j]->faces[k]->edges[l]->x->s+ *tetra[j]->faces[k]->edges[l]->y->s)/2.0f))
+					}*/
+				}				
 			}
 		}
+
 	}
 
 }
@@ -1500,6 +1529,7 @@ void GeomManager::start()
 	m_cam2D->setOrthoSize(15.0f);
 
 	m_sb = m_pc.modelManager->allocateBuffer("../Model/cube.obj");	
+	m_faceShape = m_pc.modelManager->allocateBuffer("../Model/triangle.obj");
 	GraphiquePipeline* gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
 
 	Model* cube = m_pc.modelManager->createModel(m_sb);
