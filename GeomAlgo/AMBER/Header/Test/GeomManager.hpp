@@ -7,7 +7,11 @@
 #include <string>
 #include <vector>
 
+struct Sommet3D;
 struct Triangle;
+struct Edge3D;
+struct Face;
+struct Tetra;
 
 class GeomManager : public ImguiBlock, public Behaviour
 {
@@ -21,6 +25,7 @@ public:
 	void preRender(VulkanMisc* vM);
 	void render(VulkanMisc* vM);
 	Model* createSegment(glm::vec2 p1, glm::vec2 p2, Materials* mat = nullptr);
+	Model* createSegment3D(glm::vec3 p1, glm::vec3 p2, Materials* mat = nullptr);
 	glm::vec3 directionToRotation(glm::vec3 direction);
 	float getAngle(glm::vec2 a, glm::vec2 b);
 	void marcheJarvis();
@@ -30,6 +35,7 @@ public:
 	void DelaunayTriangulation2DTest();
 	void DelaunayNoyauxTriangulation();
 	void Voronoi();
+	void ConvexHull3D();
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
@@ -39,8 +45,10 @@ private:
 	bool m_cameraChange = false;
 	bool m_planeShowHide = false;
 	bool m_convexHullChange = false;
+	bool m_convexHull3DChange = false;
 	bool m_delaunayNoyaux = false;
 	bool m_convexHullCheck = true;
+	bool m_convexHull3DCheck = false;
 	bool m_delaunayNoyauxCheck = false;
 	bool m_planeActive = true;
 	bool m_priority = false;
@@ -48,12 +56,14 @@ private:
 	bool m_clearCloudPoint = false;
 	bool m_rotate = false;
 	bool m_convexHull = false;
+	bool m_convexHull3D = false;
 	bool m_marcheJarvis = false;
 	bool m_cloudButton = false;
 	bool m_isMouseOverUI = false;
 
 
 	float m_size = 0.05f;
+	float m_height = 0.0f;
 	int m_control_point = -1;
 	int m_courbe_point = 0;
 	int m_listboxCurrentItem = 0;
@@ -68,11 +78,16 @@ private:
 
 	std::vector<Model*> m_segments;
 	std::vector<glm::uvec3> currentTriangle;
+	std::vector<Sommet3D*> sommets;
+	std::vector<Edge3D*> edges;
+	std::vector<Face*> faces;
+	std::vector<Tetra*> tetra;
 
 	ShapeBuffer* m_sb = nullptr;
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;	
 	Materials* m_segmentMat2 = nullptr;
+	Materials* m_segmentMat3 = nullptr;
 	std::vector<Model*> m_extrusionList;
 	Model* m_plane;
 };

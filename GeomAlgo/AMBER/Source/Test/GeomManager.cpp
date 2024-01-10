@@ -8,6 +8,13 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/intersect.hpp>
 #include <iostream>
+#include <unordered_set>
+#include <functional>
+
+#define ROUGE 0
+#define VIOLET 1
+#define BLEU 2
+
 
 GeomManager::GeomManager(Model* plane)
 {
@@ -32,6 +39,19 @@ Model* GeomManager::createSegment(glm::vec2 p1, glm::vec2 p2,Materials * mat)
 	m->setScale(glm::vec3(scale, m_size, m_size));
 	glm::vec2 direction = p2 - p1;
 	m->setEulerAngles(directionToRotation(glm::vec3(direction.x, 0.0f, direction.y)));
+	return m;
+}
+
+Model* GeomManager::createSegment3D(glm::vec3 p1, glm::vec3 p2, Materials* mat)
+{
+	glm::vec3 pos = (p1 + p2) / 2.0f;
+	float scale = glm::distance(p1, p2);
+	Model* m = m_pc.modelManager->createModel(m_sb);
+	m->setMaterial(mat == nullptr ? m_segmentMat : mat);
+	m->setPosition(pos);
+	m->setScale(glm::vec3(scale, m_size, m_size));
+	glm::vec3 direction = p2 - p1;
+	m->setEulerAngles(directionToRotation(direction));
 	return m;
 }
 
@@ -236,6 +256,11 @@ bool almost_equal(const glm::vec2& v1, const glm::vec2& v2)
 	return almost_equal(v1.x, v2.x) && almost_equal(v1.y, v2.y);
 }
 
+bool almost_equal(const glm::vec3& v1, const glm::vec3& v2)
+{
+	return almost_equal(v1.x, v2.x) && almost_equal(v1.y, v2.y) && almost_equal(v1.z, v2.z);
+}
+
 struct Triangle {
 	glm::vec2 * x;
 	glm::vec2 * y;
@@ -301,6 +326,159 @@ struct Edge
 		x = ex;
 		y = ey;
 		isBad = false;
+	}
+};
+
+struct Vec3PtrHash {
+	size_t operator()(const glm::vec3* ptr) const {
+		return reinterpret_cast<size_t>(ptr);
+	}
+};
+
+struct Vec3PtrEqual {
+	bool operator()(const glm::vec3* lhs, const glm::vec3* rhs) const {
+		return almost_equal(*lhs, *rhs);
+	}
+};
+
+struct Edge3D;
+class Sommet3D
+{
+public:
+	glm::vec3* s;
+	int color = ROUGE;
+	std::vector<Edge3D*> edges;
+	Sommet3D(glm::vec3* es)
+	{
+		s = es;
+	}
+};
+
+struct Face;
+struct Edge3D
+{
+	std::vector<Sommet3D*> points;
+	Sommet3D* x;
+	Sommet3D* y;
+	int color = ROUGE;
+	std::vector<Face*> faces;
+
+	Edge3D(Sommet3D* ex, Sommet3D* ey)
+	{
+		x = ex;
+		y = ey;
+		x->edges.push_back(this);
+		y->edges.push_back(this);
+		points.push_back(x);
+		points.push_back(y);
+	}
+};
+
+struct Face
+{
+	std::vector<Edge3D*> edges;
+	Edge3D* x;
+	Edge3D* y;
+	Edge3D* z;
+	std::vector<Sommet3D*> list_Point;
+	glm::vec3 centre;
+	bool inactive = false;
+	int color = ROUGE;
+
+	std::vector<Sommet3D*> GetPoints()
+	{
+		std::vector<Sommet3D*> lp;
+		for (int k = 0; k < edges.size(); k++)
+		{
+			for (int l = 0; l < 2; l++)
+			{
+				bool contain = false;
+				for (int i = 0; i < lp.size() && !contain; i++)
+				{
+					if (almost_equal(*edges[k]->points[l]->s, *lp[i]->s))
+					{
+						contain = true;
+					}
+				}
+				if (!contain)
+				{
+					lp.push_back(edges[k]->points[l]);
+				}
+			}
+		}
+		return lp;
+	}
+	Face(Edge3D* ex, Edge3D* ey, Edge3D* ez)
+	{
+		x = ex;
+		y = ey;
+		z = ez;
+		x->faces.push_back(this);
+		y->faces.push_back(this);
+		z->faces.push_back(this);
+		edges.push_back(x);
+		edges.push_back(y);
+		edges.push_back(z);
+		list_Point = GetPoints();
+		std::cout << list_Point.size() << std::endl;
+		centre = (*list_Point[0]->s + *list_Point[1]->s + *list_Point[2]->s) / 3.0f;
+	}
+
+	glm::vec3 Normal()
+	{
+		glm::vec3 edge1 = *list_Point[2]->s - *list_Point[0]->s;
+		glm::vec3 edge2 = *list_Point[2]->s - *list_Point[1]->s;
+		return glm::normalize(glm::cross(edge1, edge2));
+	}
+
+	glm::vec3 Normal(glm::vec3 bary)
+	{
+		glm::vec3 edge1 = *list_Point[2]->s - *list_Point[0]->s;
+		glm::vec3 edge2 = *list_Point[2]->s - *list_Point[1]->s;
+		glm::vec3 normal = glm::normalize(glm::cross(edge1, edge2));
+		if (glm::dot(glm::normalize(centre-bary), normal) < 0)
+		{
+			normal = -normal;
+		}
+		return normal;
+	}
+	
+};
+
+struct Tetra
+{
+	std::vector<Face*> faces;
+
+	glm::vec3 bary;
+	Tetra(Face* ex, Face* ey, Face* ez, Face* ew)
+	{
+		faces.push_back(ex);
+		faces.push_back(ey);
+		faces.push_back(ez);
+		faces.push_back(ew);
+
+		std::vector<Sommet3D*> lp;
+		for (int m = 0; m < faces.size(); m++)
+		{
+			for (int k = 0; k < faces[m]->list_Point.size(); k++)
+			{
+
+				bool contain = false;
+				for (int i = 0; i < lp.size() && !contain; i++)
+				{
+					if (almost_equal(*faces[m]->list_Point[k]->s, *lp[i]->s))
+					{
+						contain = true;
+					}
+				}
+				if (!contain)
+				{
+					lp.push_back(faces[m]->list_Point[k]);
+				}
+			}
+		}
+		bary = (*lp[0]->s + *lp[1]->s + *lp[2]->s + *lp[3]->s)/4.0f;
+
 	}
 };
 
@@ -925,6 +1103,192 @@ void GeomManager::Voronoi()
 	}
 }
 
+void GeomManager::ConvexHull3D()
+{
+	for (int i = 0; i < m_segments.size(); i++)
+	{
+		m_pc.modelManager->destroyModel(m_segments[i]);
+	}
+	m_segments.clear();
+	std::vector<Sommet3D*> sommets;
+	std::vector<glm::vec3> fdp;
+	for (int i = 0; i < m_points_clouds.size(); i++)
+	{
+		fdp.push_back(m_points_clouds[i]->getPosition());
+	}
+	for (int i = 0; i < fdp.size(); i++)
+	{
+		glm::vec3* pos = fdp.data()+i;
+		Sommet3D* s = new Sommet3D(pos);
+		sommets.push_back(s);
+		std::cout << pos << std::endl;
+	}
+	std::vector<Edge3D*> edges;
+	std::vector<Face*> faces;
+	std::vector<Tetra*> tetra;
+
+	if (m_points_clouds.size() > 3)
+	{
+		edges.push_back(new Edge3D(sommets[0], sommets[1]));
+		edges.push_back(new Edge3D(sommets[1], sommets[2]));
+		edges.push_back(new Edge3D(sommets[2], sommets[0]));
+		faces.push_back(new Face(edges[0], edges[1], edges[2]));
+		edges.push_back(new Edge3D(sommets[0], sommets[3]));
+		edges.push_back(new Edge3D(sommets[1], sommets[3]));
+		edges.push_back(new Edge3D(sommets[2], sommets[3]));
+		faces.push_back(new Face(edges[0], edges[3], edges[4]));
+		faces.push_back(new Face(edges[2], edges[3], edges[5]));
+		faces.push_back(new Face(edges[1], edges[4], edges[5]));
+		tetra.push_back(new Tetra(faces[0], faces[1], faces[2], faces[3]));
+		
+		for (int i = 4; i < m_points_clouds.size(); i++)
+		{
+
+			glm::vec3 bary = glm::vec3(0.0f);
+			int noInactive = 0;
+			for (int j = 0; j < faces.size(); j++)
+			{
+				if (!faces[j]->inactive)
+				{
+					for (int k = 0; k < faces[j]->list_Point.size(); k++)
+					{
+						bary.x += faces[j]->list_Point[k]->s->x;
+						bary.y += faces[j]->list_Point[k]->s->y;
+						bary.z += faces[j]->list_Point[k]->s->z;
+					}
+				}
+				else
+				{
+					noInactive++;
+				}
+			}
+			bary = bary / float((faces.size()*3.0f) - (noInactive*3.0f));
+			for (int j = 0; j < faces.size(); j++)
+			{
+				if (!faces[j]->inactive)
+				{
+					glm::vec3 normal = faces[j]->Normal(bary);
+					glm::vec3 dir = glm::normalize(faces[j]->centre - m_points_clouds[i]->getPosition());
+					if (glm::dot(normal, dir) < 0)
+					{
+						faces[j]->color = BLEU;
+					}
+				}
+			}
+
+			/*for (int j = 0; j < tetra.size(); j++)
+			{
+				for (int k = 0; k < tetra[j]->faces.size(); k++)
+				{
+					if (!tetra[j]->faces[k]->inactive)
+					{
+						glm::vec3 normal = tetra[j]->faces[k]->Normal(tetra[j]->bary);
+						glm::vec3 dir = glm::normalize(tetra[j]->faces[k]->centre - m_points_clouds[i]->getPosition());
+						if (glm::dot(normal, dir) < 0)
+						{
+							tetra[j]->faces[k]->color = BLEU;
+						}
+					}
+				}
+			}*/
+			for (int j = 0; j < edges.size(); j++)
+			{
+				if (edges[j]->color != BLEU)
+				{
+					edges[j]->color = ROUGE;
+				}
+				int count = 0;
+				for (int k = 0; k < edges[j]->faces.size(); k++)
+				{
+					if (edges[j]->faces[k]->color == BLEU && !edges[j]->faces[k]->inactive)
+					{
+						count++;
+						edges[j]->color = VIOLET;
+						if (count == 2)
+						{
+							edges[j]->color = BLEU;
+						}
+					}
+				}
+				/*if (edges[j]->color == BLEU)
+				{
+					for (int k = 0; k < edges[j]->points.size(); k++)
+					{
+						edges[j]->points[k]->color = BLEU;
+					}
+				}
+				if (edges[j]->color == VIOLET)
+				{
+					for (int k = 0; k < edges[j]->points.size(); k++)
+					{
+						edges[j]->points[k]->color = VIOLET;
+					}
+				}*/
+			}
+
+			/*for (int j = 0; j < faces.size(); j++)
+			{
+				if (faces[j]->color == BLEU && !faces[j]->inactive)
+				{
+					for (int k = 0; k < faces[j]->edges.size(); k++)
+					{
+						faces[j]->edges[k]->color++;
+					}
+				}
+			}*/
+
+			for (int j = 0; j < faces.size(); j++)
+			{
+				if (faces[j]->color == BLEU && !faces[j]->inactive)
+				{
+					std::vector<Face*> newFaces;
+					std::vector<Edge3D*> newEdges;
+					newEdges.push_back(new Edge3D(faces[j]->list_Point[0], sommets[i]));
+					newEdges.push_back(new Edge3D(faces[j]->list_Point[1], sommets[i]));
+					newEdges.push_back(new Edge3D(faces[j]->list_Point[2], sommets[i]));
+
+					newFaces.push_back(new Face(faces[j]->edges[0], newEdges[0], newEdges[1]));
+					newFaces.push_back(new Face(faces[j]->edges[1], newEdges[1], newEdges[2]));
+					newFaces.push_back(new Face(faces[j]->edges[2], newEdges[2], newEdges[0]));
+					if (faces[j]->edges[0]->color >= BLEU)
+					{
+						newFaces[0]->inactive = true;
+					}
+					if (faces[j]->edges[1]->color >= BLEU)
+					{
+						newFaces[1]->inactive = true;
+					}
+					if (faces[j]->edges[2]->color >= BLEU)
+					{
+						newFaces[2]->inactive = true;
+					}
+					edges.insert(edges.end(), newEdges.begin(), newEdges.end());
+					faces[j]->inactive = true;
+					tetra.push_back(new Tetra(faces[j], newFaces[0], newFaces[1], newFaces[2]));
+					faces.insert(faces.end(), newFaces.begin(), newFaces.end());
+					
+				}
+			}
+
+		}
+
+		for (int j = 0; j < tetra.size(); j++)
+		{
+			for (int k = 0; k < tetra[j]->faces.size(); k++)
+			{
+				//if (!tetra[j]->faces[k]->inactive)
+				{
+					for (int l = 0; l < tetra[j]->faces[k]->edges.size(); l++)
+					{
+						m_segments.push_back(createSegment3D(*tetra[j]->faces[k]->edges[l]->x->s, *tetra[j]->faces[k]->edges[l]->y->s, tetra[j]->faces[k]->edges[l]->color >= BLEU ? m_pointMat : tetra[j]->faces[k]->edges[l]->color == VIOLET ? m_segmentMat3 : m_segmentMat));
+					}
+				}
+			}
+		}
+	}
+
+}
+
 void GeomManager::start()
 {
 	m_pc = GameEngine::getPtrClass();
@@ -962,6 +1326,12 @@ void GeomManager::start()
 	m_segmentMat2->setMetallic(0.7f);
 	m_segmentMat2->setRoughness(0.15f);
 	m_segmentMat2->setPipeline(gp_unlit);
+
+	m_segmentMat3 = m_pc.materialManager->createMaterial();
+	m_segmentMat3->setColor(glm::vec3(0.53f, 0.42f, 1.0f));
+	m_segmentMat3->setMetallic(0.7f);
+	m_segmentMat3->setRoughness(0.15f);
+	m_segmentMat3->setPipeline(gp_unlit);
 }
 
 void GeomManager::fixedUpdate()
@@ -988,6 +1358,12 @@ void GeomManager::update()
 	{
 		m_convexHullChange = false;
 		m_convexHull = !m_convexHull;
+	}
+
+	if (m_convexHull3DChange)
+	{
+		m_convexHull3DChange = false;
+		m_convexHull3D = !m_convexHull3D;
 	}
 	if (m_clearCloudPoint)
 	{
@@ -1018,7 +1394,14 @@ void GeomManager::update()
 				glm::vec2 mp = glm::vec2(m_pc.inputManager->getMousePosX(), m_pc.inputManager->getMousePosY());
 				glm::vec2 ss = glm::vec2(m_pc.settingManager->getWindowWidth(), m_pc.settingManager->getWindowHeight());
 				glm::vec2 pos = m_cam2D->ScreenToSpace(mp, ss);
-				m->setPosition(glm::vec3(pos.x, 0.0f, pos.y));
+				if (m_convexHull3D)
+				{
+					m->setPosition(glm::vec3(pos.x, m_height, pos.y));
+				}
+				else
+				{
+					m->setPosition(glm::vec3(pos.x, 0.0f, pos.y));
+				}
 				m_points_clouds.push_back(m);
 				m_cloudButton = false;
 				//PointLight* pl = m_pc.lightManager->createPointLight(glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -1027,7 +1410,7 @@ void GeomManager::update()
 				//m_points_light_clouds.push_back(pl);
 				if (m_points_clouds.size() > 2)
 				{
-					if (!m_convexHull) 
+					if (m_convexHull) 
 					{
 						if (m_marcheJarvis)
 						{
@@ -1037,6 +1420,10 @@ void GeomManager::update()
 						{
 							grahamScan();
 						}
+					}
+					else if(m_convexHull3D)
+					{
+						ConvexHull3D();
 					}
 					else
 					{
@@ -1089,6 +1476,10 @@ void GeomManager::render(VulkanMisc* vM)
 		}
 		if (m_cloudPoint)
 		{
+			if (m_convexHull3D)
+			{
+				ImGui::SliderFloat("Height", &m_height, 0.0f, 5.0f);
+			}
 			if (ImGui::Button("Close"))
 			{
 				m_cloudPoint = false;
@@ -1105,15 +1496,31 @@ void GeomManager::render(VulkanMisc* vM)
 			if (ImGui::Checkbox("Create Convex Hull", &m_convexHullCheck))
 			{
 				m_convexHullChange = true;
+				m_convexHull3DCheck = false;
+				m_convexHull3DChange = false;
+				m_convexHull3D = false;
 				m_delaunayNoyaux = false;
 				m_delaunayNoyauxCheck = false;
 			}
+			if (ImGui::Checkbox("Create 3D Convex Hull", &m_convexHull3DCheck))
+			{
+				m_convexHullChange = false;
+				m_convexHullCheck = false;
+				m_convexHull3DChange = true;
+				m_convexHull = false;
+				m_delaunayNoyaux = false;
+				m_delaunayNoyauxCheck = false;
+			}
+
 			if (ImGui::Checkbox("Create delaunay Noyaux", &m_delaunayNoyauxCheck))
 			{
 				m_delaunayNoyaux = true;
 				m_convexHullChange = false;
 				m_convexHullCheck = false;
 				m_convexHull = false;
+				m_convexHull3DCheck = false;
+				m_convexHull3DChange = false;
+				m_convexHull3D = false;
 			}			
 
 			if (ImGui::Button("Marche de Jarvis"))
