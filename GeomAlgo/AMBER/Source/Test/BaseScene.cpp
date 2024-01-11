@@ -5,7 +5,7 @@ void BaseScene::load()
 	m_pc = GameEngine::getPtrClass();
 	ShapeBuffer* sb = m_pc.modelManager->allocateBuffer("../Model/plane.obj");
 	Model* plane = m_pc.modelManager->createModel(sb, "Plane");
-	m_em = new GeomManager(plane);
+	m_em = new BoneManager(plane);
 	m_pc.behaviourManager->addBehaviour(m_em);
 	m_pc.hud->addBlockUI(m_em);
 

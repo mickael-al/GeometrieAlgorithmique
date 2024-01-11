@@ -3,7 +3,7 @@
 
 #include "Scene.hpp"
 #include "GameEngine.hpp"
-#include "GeomManager.hpp"
+#include "BoneManager.hpp"
 #include <vector>
 
 class BaseScene : public Scene
@@ -13,7 +13,7 @@ public:
 	void unload();
 private:
 	ptrClass m_pc;
-	GeomManager* m_em;
+	BoneManager* m_em;
 };
 
 #endif //!__BASE_SCENE__
