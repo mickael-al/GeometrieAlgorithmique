@@ -766,8 +766,6 @@ void GeomManager::DelaunayNoyauxTriangulation()
 	}
 	m_segments.clear();
 
-	std::vector<Triangle> triangles;
-	std::vector<glm::vec2> point2d;
 
 	if (m_points_clouds.size() == 0)
 	{
@@ -781,15 +779,12 @@ void GeomManager::DelaunayNoyauxTriangulation()
 	}
 	if (m_points_clouds.size() == 2)
 	{
-		point2d.push_back(glm::vec2(m_points_clouds[0]->getPosition().x, m_points_clouds[0]->getPosition().z));
 		point2d.push_back(glm::vec2(m_points_clouds[1]->getPosition().x, m_points_clouds[1]->getPosition().z));
 		m_segments.push_back(createSegment(point2d[0], point2d[1]));
 		return;
 	}
 	if (m_points_clouds.size() == 3)
 	{
-		point2d.push_back(glm::vec2(m_points_clouds[0]->getPosition().x, m_points_clouds[0]->getPosition().z));
-		point2d.push_back(glm::vec2(m_points_clouds[1]->getPosition().x, m_points_clouds[1]->getPosition().z));
 		point2d.push_back(glm::vec2(m_points_clouds[2]->getPosition().x, m_points_clouds[2]->getPosition().z));
 		m_segments.push_back(createSegment(point2d[0], point2d[1]));
 		m_segments.push_back(createSegment(point2d[1], point2d[2]));
@@ -797,28 +792,28 @@ void GeomManager::DelaunayNoyauxTriangulation()
 		triangles.push_back(Triangle(&point2d[0], &point2d[1], &point2d[2]));
 	}
 
-	glm::vec2 last_point = m_points_clouds[m_points_clouds.size()]->getPosition();
+	glm::vec2 last_point = m_points_clouds[m_points_clouds.size() - 1]->getPosition();
 
+	point2d.push_back(glm::vec2(m_points_clouds[0]->getPosition().x, m_points_clouds[0]->getPosition().z));
+	point2d.push_back(glm::vec2(m_points_clouds[1]->getPosition().x, m_points_clouds[1]->getPosition().z));
+	point2d.push_back(glm::vec2(m_points_clouds[2]->getPosition().x, m_points_clouds[2]->getPosition().z));
+	triangles.push_back(Triangle(&point2d[0], &point2d[1], &point2d[2]));
+
+	if (point_in_triangle(last_point, *triangles[0].x, *triangles[0].y, *triangles[0].z))
+	{
+		return;
+	}
+	return;
 	for (int i = 0; i < triangles.size(); i++)
 	{
-		if ()
-		{
-
-		}
-	}
-
-	if (true)
-	{
-
+		m_segments.push_back(createSegment(*triangles[i].x, *triangles[i].y));
+		m_segments.push_back(createSegment(*triangles[i].y, *triangles[i].z));
+		m_segments.push_back(createSegment(*triangles[i].z, *triangles[i].x));
 	}
 
 	return;
 
-	if (true)
-	{
-
-	}
-
+	//Old code
 	if (currentTriangle.size() == 0)
 	{				
 		currentTriangle.clear();
@@ -1682,9 +1677,9 @@ void GeomManager::update()
 					
 				}
 				if (m_delaunayNoyaux)
-					{
-						DelaunayNoyauxTriangulation();
-					}
+				{
+					DelaunayNoyauxTriangulation();
+				}
 			}
 		}
 		else
@@ -1835,7 +1830,7 @@ void GeomManager::render(VulkanMisc* vM)
 			}*/
 			if (ImGui::Button("Delaunay Triangulation noyaux"))
 			{
-				if (m_points_clouds.size() > 2)
+				if (/*m_points_clouds.size() > 2*/true)
 				{
 					DelaunayNoyauxTriangulation();
 				}

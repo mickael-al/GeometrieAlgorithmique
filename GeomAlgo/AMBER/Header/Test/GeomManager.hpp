@@ -78,6 +78,9 @@ private:
 	std::vector<std::string> valueS;
 	std::vector<std::string> valueSExtrusion;
 
+	std::vector<glm::vec2> point2d;
+	std::vector<Triangle> triangles;
+
 	std::vector<Model*> m_points_clouds;
 	std::vector<PointLight*> m_points_light_clouds;
 
