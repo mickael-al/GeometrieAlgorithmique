@@ -99,6 +99,8 @@ private:
 	Materials* m_segmentMat3 = nullptr;
 	std::vector<Model*> m_extrusionList;
 	Model* m_plane;
+	std::vector<Model*> m_faceModel;
+	ShapeBuffer* m_faceShape = nullptr;
 };
 
 #endif//!__GEOMETRIE_MANAGER__
