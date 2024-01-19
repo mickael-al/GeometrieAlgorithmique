@@ -7,6 +7,12 @@
 #include <string>
 #include <vector>
 
+struct BoundingBox
+{
+	glm::vec3 pos;
+	glm::vec3 size;
+};
+
 class BoneManager : public ImguiBlock, public Behaviour
 {
 public:
@@ -31,8 +37,15 @@ private:
 	bool m_priority = false;
 	bool m_planeShowHide = false;
 	bool m_isMouseOverUI = false;
+	bool m_create = false;
 	float m_size = 0.05f;
+	int selectedItem = 0;
 
+	std::vector<BoundingBox> m_bb;
+	std::vector<const char*> m_pointListbb;
+	int m_selectedItemBB = 0;
+	Model* m_modelCurrent = nullptr;
+	ShapeBuffer* m_shapeCurrent = nullptr;
 	ShapeBuffer* m_sb = nullptr;
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;

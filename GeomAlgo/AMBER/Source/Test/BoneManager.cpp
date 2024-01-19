@@ -85,7 +85,12 @@ void BoneManager::update()
 		m_planeActive = false;
 		m_plane->setScale(m_planeShowHide ? glm::vec3(10.0f, 1.0f, 10.0f) : glm::vec3(0.0f));
 	}
-
+	if (m_create)
+	{
+		m_shapeCurrent = m_pc.modelManager->allocateBuffer(selectedItem == 0 ? "../Assets/spaghet.obj" : selectedItem == 1 ? "../Assets/MIddlePoly.obj" : "../Assets/UltraLowPoly.obj");
+		m_modelCurrent = m_pc.modelManager->createModel(m_shapeCurrent);
+		m_create = false;
+	}
 
 }
 
@@ -116,6 +121,19 @@ void BoneManager::render(VulkanMisc* vM)
 		if (ImGui::Checkbox("Show/Hide Plane", &m_planeShowHide))
 		{
 			m_planeActive = true;
+		}
+		ImGui::Combo("Model", &selectedItem, "Spaghet\0MIddlePoly\0UltraLowPoly\0");
+		if (ImGui::Button("Create"))
+		{
+			m_create = true;			
+		}
+		if (m_bb.size() > 0)
+		{
+			ImGui::ListBox("Liste de BoundingBox", &m_selectedItemBB, m_pointListbb.data(), m_pointListbb.size());
+		}
+		if (ImGui::Button("Create Box"))
+		{
+			m_pointListbb.push_back(std::to_string(m_bb.size()).c_str());
 		}
 
 		ImGui::Spacing();
