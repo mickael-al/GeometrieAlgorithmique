@@ -108,6 +108,30 @@ void BoneManager::update()
 		m_delete = false;
 	}	
 }
+	}
+
+	if (m_create_box)
+	{
+		BoundingBox* new_box = new BoundingBox();
+		new_box->box = m_pc.modelManager->createModel(m_sb);
+		m_bb.push_back(new_box);
+		new_box->name = "Box" + std::to_string(m_bb.size());
+		m_pointListbb.push_back(new_box->name.c_str());
+		m_create_box = false;
+	}
+
+	if (m_delete_box)
+	{
+		BoundingBox* current_box = m_bb[m_selectedItemBB];
+		Debug::Log("%d", m_selectedItemBB);
+		m_pc.modelManager->destroyModel(m_bb[m_selectedItemBB]->box);
+		m_bb.erase(std::remove(m_bb.begin(), m_bb.end(), m_bb[m_selectedItemBB]), m_bb.end());
+		m_pointListbb.erase(m_pointListbb.begin() + m_selectedItemBB);
+		m_selectedItemBB = 0;
+		m_delete_box = false;
+	}
+
+}
 
 void BoneManager::stop()
 {
@@ -151,12 +175,17 @@ void BoneManager::render(VulkanMisc* vM)
 		if (m_bb.size() > 0)
 		{
 			ImGui::ListBox("Liste de BoundingBox", &m_selectedItemBB, m_pointListbb.data(), m_pointListbb.size());
+			m_bb[m_selectedItemBB]->box->onGUI();
 		}
 		if (ImGui::Button("Create Box"))
 		{
-			m_pointListbb.push_back(std::to_string(m_bb.size()).c_str());
+			m_create_box = true;
 		}
 
+		if (ImGui::Button("Delete Box"))
+		{
+			m_delete_box = true;
+		}
 		ImGui::Spacing();
 	}
 	ImGui::End();
