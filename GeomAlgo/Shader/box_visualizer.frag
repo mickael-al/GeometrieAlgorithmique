@@ -137,7 +137,7 @@ void main()
         discard;
         return;
     }
-    vec3 color = cr.rgb * ubm[imaterial].albedo * Color;
+    vec3 color = cr.rgb * ubm[imaterial].albedo;
     vec3 ambient = vec3(0.003) * color * ubm[imaterial].ao * texture(texSampler[ubm[imaterial].aoMap], fragTexCoord).rgb;
     vec3 metallic = texture(texSampler[ubm[imaterial].metallicMap], fragTexCoord).rgb * ubm[imaterial].metallic;
     float roughness = texture(texSampler[ubm[imaterial].roughnessMap], fragTexCoord).r * ubm[imaterial].roughness;
@@ -227,5 +227,20 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
 
-    outColor = vec4(color, cr.a);
+    
+        
+
+     float edgeThreshold = 0.025;
+
+    // Vérifiez si le point est sur une arête en vérifiant si l'une des coordonnées barycentriques est dans une plage proche de zéro
+    vec3 bary = normalize(Color);
+
+    if(bary.x < edgeThreshold || bary.y < edgeThreshold || bary.z < edgeThreshold)
+     {
+        outColor = vec4(0,1,0, cr.a);
+
+        return;
+     }
+     discard;
+   outColor = vec4(color, cr.a);
 }

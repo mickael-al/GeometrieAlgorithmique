@@ -25,6 +25,7 @@ public:
 	void onGUI();
 	void preRender(VulkanMisc* vM);
 	void render(VulkanMisc* vM);
+	std::vector<glm::vec3> getCloudPointBox(BoundingBox* bb);
 	glm::vec3 directionToRotation(glm::vec3 direction);
 	Model* createSegment3D(glm::vec3 p1, glm::vec3 p2, Materials* mat = nullptr);
 private:
@@ -41,10 +42,12 @@ private:
 	bool m_create = false;
 	bool m_create_box = false;
 	bool m_delete_box = false;
+	bool m_create_bone = false;
 	bool m_delete = false;
 	float m_size = 0.05f;
 	int selectedItem = 0;
 
+	Materials* box_material;
 	std::vector<BoundingBox*> m_bb;
 	std::vector<const char*> m_pointListbb;
 	ShapeBuffer* m_shapeBuffer_box = nullptr;
@@ -54,6 +57,7 @@ private:
 	Materials * m_matCurrent = nullptr;
 	ShapeBuffer* m_shapeCurrent = nullptr;
 	ShapeBuffer* m_sb = nullptr;
+	ShapeBuffer* m_sb_wire = nullptr;
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;
 	Model* m_plane;

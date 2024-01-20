@@ -53,8 +53,14 @@ void BoneManager::start()
 	m_cam2D->setOrthoSize(15.0f);
 
 	m_sb = m_pc.modelManager->allocateBuffer("../Model/cube.obj");
+	m_sb_wire = m_pc.modelManager->allocateBufferWire("../Model/cube.obj");
+
 	GraphiquePipeline * gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
 	GraphiquePipeline * gp_wire = m_pc.graphiquePipelineManager->createPipeline("../Shader/shader_wireframe_fs.spv", "../Shader/vert.spv");
+	GraphiquePipeline* gp_box = m_pc.graphiquePipelineManager->createPipeline("../Shader/box_visualizer.spv", "../Shader/vert.spv", false, true, false, 0);
+	
+	box_material = m_pc.materialManager->createMaterial();
+	box_material->setPipeline(gp_box);
 
 	Model * cube = m_pc.modelManager->createModel(m_sb);
 	cube->setScale(glm::vec3(0));
@@ -68,6 +74,33 @@ void BoneManager::start()
 void BoneManager::fixedUpdate()
 {
 
+}
+
+bool isPointInsideBoundingBox(const glm::vec3& point, const glm::vec3 &min, const glm::vec3 &max) {
+	return (point.x >= min.x && point.x <= max.x &&
+		point.y >= min.y && point.y <= max.y &&
+		point.z >= min.z && point.z <= max.z);
+}
+
+std::vector<glm::vec3> BoneManager::getCloudPointBox(BoundingBox* bb) {
+	std::vector<glm::vec3> points;
+	if (m_modelCurrent != nullptr)
+	{
+		std::vector<Vertex> vertex = m_modelCurrent->getShapeBuffer()->getVertices();
+		glm::mat4 matrix = m_modelCurrent->getModelMatrix();
+		glm::vec3 n_pos;
+		glm::vec3 min_pos = bb->box->getPosition() - bb->box->getScale() / 2.0f;
+		glm::vec3 max_pos = bb->box->getPosition() + bb->box->getScale() / 2.0f;
+		for (size_t i = 0; i < vertex.size(); i++)
+		{
+			n_pos = (glm::vec4(vertex[i].pos, 1) * matrix);
+			if (isPointInsideBoundingBox(n_pos, min_pos, max_pos))
+			{
+				points.push_back(n_pos);
+			}
+		}
+	}
+	return points;
 }
 
 void BoneManager::update()
@@ -111,7 +144,8 @@ void BoneManager::update()
 	if (m_create_box)
 	{
 		BoundingBox* new_box = new BoundingBox();
-		new_box->box = m_pc.modelManager->createModel(m_sb);
+		new_box->box = m_pc.modelManager->createModel(m_sb_wire);
+		new_box->box->setMaterial(box_material);
 		m_bb.push_back(new_box);
 		new_box->name = "Box" + std::to_string(m_bb.size());
 		m_pointListbb.push_back(new_box->name.c_str());
@@ -124,9 +158,21 @@ void BoneManager::update()
 		Debug::Log("%d", m_selectedItemBB);
 		m_pc.modelManager->destroyModel(m_bb[m_selectedItemBB]->box);
 		m_bb.erase(std::remove(m_bb.begin(), m_bb.end(), m_bb[m_selectedItemBB]), m_bb.end());
+
 		m_pointListbb.erase(m_pointListbb.begin() + m_selectedItemBB);
 		m_selectedItemBB = 0;
 		m_delete_box = false;
+	}
+	if (m_create_bone)
+	{
+		std::vector<glm::vec3> pointlist = getCloudPointBox(m_bb[m_selectedItemBB]);
+		for (size_t i = 0; i < pointlist.size(); i++)
+		{
+			Model* m = m_pc.modelManager->createModel(m_sb);
+			m->setScale(glm::vec3(0.05f));
+			m->setPosition(pointlist[i]);
+		}
+		m_create_bone = false;
 	}
 }
 
@@ -183,6 +229,12 @@ void BoneManager::render(VulkanMisc* vM)
 		{
 			m_delete_box = true;
 		}
+
+		if (ImGui::Button("Create Bone"))
+		{
+			m_create_bone = true;
+		}
+
 		ImGui::Spacing();
 	}
 	ImGui::End();

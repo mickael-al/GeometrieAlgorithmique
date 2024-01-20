@@ -230,7 +230,7 @@ void main()
     
         
 
-     float edgeThreshold = 0.05;
+     float edgeThreshold = 0.025;
 
     // Vérifiez si le point est sur une arête en vérifiant si l'une des coordonnées barycentriques est dans une plage proche de zéro
     vec3 bary = normalize(Color);
