@@ -19,6 +19,8 @@ namespace Ge
 		const std::vector<Vertex> & getVertices() const;
 		uint32_t getIndiceSize() const;
 	private:
+		virtual void construct(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, VulkanMisc* vM);
+	protected:
 		std::vector<Vertex> m_vertices;
 		std::vector<uint32_t> m_indices;
 		VkDevice device;

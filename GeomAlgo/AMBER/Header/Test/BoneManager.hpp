@@ -30,7 +30,7 @@ private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
 	Camera* m_cam3D;
-
+	
 	bool m_open = false;
 	bool m_cameraChange = false;
 	bool m_planeActive = true;
@@ -38,13 +38,16 @@ private:
 	bool m_planeShowHide = false;
 	bool m_isMouseOverUI = false;
 	bool m_create = false;
+	bool m_delete = false;
 	float m_size = 0.05f;
 	int selectedItem = 0;
 
 	std::vector<BoundingBox> m_bb;
 	std::vector<const char*> m_pointListbb;
 	int m_selectedItemBB = 0;
+	float m_sliderScale = 1.0f;
 	Model* m_modelCurrent = nullptr;
+	Materials * m_matCurrent = nullptr;
 	ShapeBuffer* m_shapeCurrent = nullptr;
 	ShapeBuffer* m_sb = nullptr;
 	Materials* m_pointMat = nullptr;

@@ -4,6 +4,17 @@ namespace Ge
 {
 	ShapeBuffer::ShapeBuffer(std::vector<Vertex> & vertices, std::vector<uint32_t> & indices, VulkanMisc * vM)
 	{
+		construct(vertices, indices, vM);
+	}
+
+	ShapeBuffer::~ShapeBuffer()
+	{
+		BufferManager::destroyBuffer(m_vmaIndexBuffer);
+		BufferManager::destroyBuffer(m_vmaVertexBuffer);
+	}
+
+	void ShapeBuffer::construct(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, VulkanMisc* vM)
+	{
 		m_vertices = vertices;
 		m_indices = indices;
 		device = vM->str_VulkanDeviceMisc->str_device;
@@ -29,12 +40,6 @@ namespace Ge
 		BufferManager::createBuffer(m_bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_vmaVertexBuffer, vM->str_VulkanDeviceMisc);
 		BufferManager::copyBuffer(stagingBufferV.buffer, m_vmaVertexBuffer.buffer, m_bufferSize, vM);
 		BufferManager::destroyBuffer(stagingBufferV);
-	}
-
-	ShapeBuffer::~ShapeBuffer()
-	{
-		BufferManager::destroyBuffer(m_vmaIndexBuffer);
-		BufferManager::destroyBuffer(m_vmaVertexBuffer);
 	}
 
 	VkBuffer ShapeBuffer::getIndexBuffer() const

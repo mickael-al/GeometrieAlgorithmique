@@ -635,6 +635,149 @@ namespace Ge
 
 		return sbvec;
 	}
+	/*glm::vec3 barycentric(glm::vec2 v0, glm::vec2 v1, glm::vec2 v2, glm::vec2 p)
+	{
+		// On calcule les vecteurs du triangle
+		glm::vec2 e0 = v1 - v0;
+		glm::vec2 e1 = v2 - v0;
+		glm::vec2 e2 = p - v0;
+
+		// On calcule les déterminants
+		float d00 = glm::dot(e0, e0);
+		float d01 = glm::dot(e0, e1);
+		float d11 = glm::dot(e1, e1);
+		float d20 = glm::dot(e2, e0);
+		float d21 = glm::dot(e2, e1);
+		float invDenom = 1.0 / (d00 * d11 - d01 * d01);
+
+		// On calcule les coordonnées barycentriques
+		float v = (d11 * d20 - d01 * d21) * invDenom;
+		float w = (d00 * d21 - d01 * d20) * invDenom;
+		float u = 1.0 - v - w;
+
+		// On renvoie le résultat sous forme de vec3
+		return glm::vec3(u, v, w);
+	}*/
+
+	glm::vec3 barycentric(glm::vec2 A, glm::vec2 B, glm::vec2 C, glm::vec2 P)
+	{
+		// Calcul des côtés du triangle
+		glm::vec2 v0 = B - A;
+		glm::vec2 v1 = C - A;
+		glm::vec2 v2 = P - A;
+
+		// Calcul du déterminant principal
+		float det = v0.x * v1.y - v1.x * v0.y;
+
+		// Calcul des coordonnées barycentriques
+		float u = (v1.y * v2.x - v1.x * v2.y) / det;
+		float v = (v0.x * v2.y - v0.y * v2.x) / det;
+		float w = 1.0 - u - v;
+
+		// Retourne les coordonnées barycentriques
+		return glm::vec3(u, v, w);
+	}
+
+	ShapeBuffer* ModelManager::allocateBufferWire(const char* path, bool normal_recalculate)
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warn, err;
+
+		if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path))
+		{
+			Debug::Warn("%s  %s", warn.c_str(), err.c_str());
+			return nullptr;
+		}
+
+		std::vector<Vertex> vertices;
+		std::vector<uint32_t> indices;
+		std::unordered_map<Vertex, uint32_t> uniqueVertices;
+
+		vertices.reserve(attrib.vertices.size() / 3);
+		indices.reserve(attrib.vertices.size());
+
+		for (const auto& shape : shapes)
+		{
+			for (const auto& index : shape.mesh.indices)
+			{
+				Vertex vertex{};
+
+				vertex.pos = {
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
+
+				vertex.texCoord = {
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+				};
+
+				vertex.normal = {
+					attrib.normals[3 * index.normal_index + 0],
+					attrib.normals[3 * index.normal_index + 1],
+					attrib.normals[3 * index.normal_index + 2]
+				};
+
+				vertex.color = { 1, 1, 1 };
+				vertex.tangents = { 0, 0, 0 };
+
+				//if (uniqueVertices.count(vertex) == 0)
+				{
+					uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+					vertices.emplace_back(vertex);
+				}
+
+				indices.emplace_back(uniqueVertices[vertex]);
+			}
+		}
+
+		uint32_t index0, index1, index2;
+		glm::vec3 edge1, edge2, tangent;
+		glm::vec2 deltaUV1, deltaUV2;
+		float r;
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			index0 = indices[i];
+			index1 = indices[i + 1];
+			index2 = indices[i + 2];
+
+			Vertex& vertex0 = vertices[index0];
+			Vertex& vertex1 = vertices[index1];
+			Vertex& vertex2 = vertices[index2];
+
+			vertex0.color = glm::vec3(1,0,0);
+			vertex1.color = glm::vec3(0,1,0);
+			vertex2.color = glm::vec3(0,0,1);
+
+			edge1 = vertex1.pos - vertex0.pos;
+			edge2 = vertex2.pos - vertex0.pos;
+
+			deltaUV1 = vertex1.texCoord - vertex0.texCoord;
+			deltaUV2 = vertex2.texCoord - vertex0.texCoord;
+
+			r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+			tangent = glm::normalize(r * (deltaUV2.y * edge1 - deltaUV1.y * edge2));
+
+			vertex0.tangents = tangent;
+			vertex1.tangents = tangent;
+			vertex2.tangents = tangent;
+			if (normal_recalculate)
+			{
+				glm::vec3 normal = glm::normalize(glm::cross(vertex1.pos - vertex0.pos, vertex2.pos - vertex0.pos));
+				vertex0.normal = normal;
+				vertex1.normal = normal;
+				vertex2.normal = normal;
+			}
+		}
+
+		ShapeBuffer* buffer = new ShapeBuffer(vertices, indices, vulkanM);
+		m_shapeBuffers.push_back(buffer);
+		return buffer;
+	}
 
 	ShapeBuffer* ModelManager::allocateBuffer(const char* path, bool normal_recalculate)
 	{

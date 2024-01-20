@@ -53,16 +53,16 @@ void BoneManager::start()
 	m_cam2D->setOrthoSize(15.0f);
 
 	m_sb = m_pc.modelManager->allocateBuffer("../Model/cube.obj");
-	GraphiquePipeline* gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
+	GraphiquePipeline * gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
+	GraphiquePipeline * gp_wire = m_pc.graphiquePipelineManager->createPipeline("../Shader/shader_wireframe_fs.spv", "../Shader/vert.spv");
 
-	Model* cube = m_pc.modelManager->createModel(m_sb);
+	Model * cube = m_pc.modelManager->createModel(m_sb);
 	cube->setScale(glm::vec3(0));
 	m_pointMat = m_pc.materialManager->createMaterial();
 	m_pointMat->setColor(glm::vec3(0.0f, 0.0f, 1.0f));
 	m_pointMat->setMetallic(0.7f);
 	m_pointMat->setRoughness(0.15f);
 	m_pointMat->setPipeline(gp_unlit);
-
 }
 
 void BoneManager::fixedUpdate()
@@ -85,13 +85,28 @@ void BoneManager::update()
 		m_planeActive = false;
 		m_plane->setScale(m_planeShowHide ? glm::vec3(10.0f, 1.0f, 10.0f) : glm::vec3(0.0f));
 	}
+	if (m_modelCurrent)
+	{
+		m_modelCurrent->setScale(glm::vec3(m_sliderScale));
+		if (m_delete)
+		{
+			m_pc.modelManager->destroyModel(m_modelCurrent);
+			m_pc.modelManager->destroyBuffer(m_shapeCurrent);
+			m_pc.materialManager->destroyMaterial(m_matCurrent);
+			m_delete = false;
+			m_modelCurrent = nullptr;
+		}
+	}
 	if (m_create)
 	{
-		m_shapeCurrent = m_pc.modelManager->allocateBuffer(selectedItem == 0 ? "../Assets/spaghet.obj" : selectedItem == 1 ? "../Assets/MIddlePoly.obj" : "../Assets/UltraLowPoly.obj");
-		m_modelCurrent = m_pc.modelManager->createModel(m_shapeCurrent);
+		m_shapeCurrent = m_pc.modelManager->allocateBufferWire(selectedItem == 0 ? "../Assets/spaghet.obj" : selectedItem == 1 ? "../Assets/MIddlePoly.obj" : "../Assets/UltraLowPoly.obj");
+		m_modelCurrent = m_pc.modelManager->createModel(m_shapeCurrent);		
+		m_matCurrent = m_pc.materialManager->createMaterial();
+		m_matCurrent->setPipelineIndex(3);
+		m_modelCurrent->setMaterial(m_matCurrent);
 		m_create = false;
-	}
-
+		m_delete = false;
+	}	
 }
 
 void BoneManager::stop()
@@ -123,9 +138,15 @@ void BoneManager::render(VulkanMisc* vM)
 			m_planeActive = true;
 		}
 		ImGui::Combo("Model", &selectedItem, "Spaghet\0MIddlePoly\0UltraLowPoly\0");
-		if (ImGui::Button("Create"))
+		ImGui::DragFloat("Scale", &m_sliderScale,0.05f);
+		if (ImGui::Button("Create Mesh"))
 		{
-			m_create = true;			
+			m_create = true;		
+			m_delete = true;
+		}		
+		if (ImGui::Button("Delete Mesh"))
+		{
+			m_delete = true;
 		}
 		if (m_bb.size() > 0)
 		{
