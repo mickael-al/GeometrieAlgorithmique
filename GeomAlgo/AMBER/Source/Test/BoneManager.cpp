@@ -107,8 +107,6 @@ void BoneManager::update()
 		m_create = false;
 		m_delete = false;
 	}	
-}
-	}
 
 	if (m_create_box)
 	{
@@ -130,7 +128,6 @@ void BoneManager::update()
 		m_selectedItemBB = 0;
 		m_delete_box = false;
 	}
-
 }
 
 void BoneManager::stop()
