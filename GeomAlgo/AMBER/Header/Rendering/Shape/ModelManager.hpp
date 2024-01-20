@@ -18,6 +18,7 @@ namespace Ge
         bool initiliaze(VulkanMisc *vM);
         void release();
         ShapeBuffer *allocateBuffer(const char *path, bool normal_recalculate = false);
+        ShapeBuffer * allocateBufferWire(const char* path, bool normal_recalculate = false);
         std::vector<ShapeBuffer*> allocateFBXBuffer(const char* path, bool normal_recalculate = false,std::vector<int> m_loadIdMesh = std::vector<int>());
         std::vector<ShapeBuffer*> allocateBuffers(const char* path, bool normal_recalculate = false);
 		ShapeBuffer *allocateBuffer(float * pos, float * texCord, float * normal, unsigned int * indice, unsigned vertexSize, unsigned indiceSize);

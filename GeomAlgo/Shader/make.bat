@@ -1,5 +1,7 @@
 "%VULKAN_SDK%\Bin\glslc.exe" shader.vert -o vert.spv
 "%VULKAN_SDK%\Bin\glslc.exe" shader.frag -o frag.spv
+"%VULKAN_SDK%\Bin\glslc.exe" shader_wireframe.frag -o shader_wireframe_fs.spv
+"%VULKAN_SDK%\Bin\glslc.exe" box_visualizer.frag -o box_visualizer.spv
 "%VULKAN_SDK%\Bin\glslc.exe" water.vert -o water_vs.spv
 "%VULKAN_SDK%\Bin\glslc.exe" water.frag -o water_fs.spv
 "%VULKAN_SDK%\Bin\glslc.exe" shader_unlit.vert -o vert_unlit.spv

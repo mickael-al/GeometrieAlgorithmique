@@ -53,21 +53,54 @@ void BoneManager::start()
 	m_cam2D->setOrthoSize(15.0f);
 
 	m_sb = m_pc.modelManager->allocateBuffer("../Model/cube.obj");
-	GraphiquePipeline* gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
+	m_sb_wire = m_pc.modelManager->allocateBufferWire("../Model/cube.obj");
 
-	Model* cube = m_pc.modelManager->createModel(m_sb);
+	GraphiquePipeline * gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
+	GraphiquePipeline * gp_wire = m_pc.graphiquePipelineManager->createPipeline("../Shader/shader_wireframe_fs.spv", "../Shader/vert.spv");
+	GraphiquePipeline* gp_box = m_pc.graphiquePipelineManager->createPipeline("../Shader/box_visualizer.spv", "../Shader/vert.spv", false, true, false, 0);
+	
+	box_material = m_pc.materialManager->createMaterial();
+	box_material->setPipeline(gp_box);
+
+	Model * cube = m_pc.modelManager->createModel(m_sb);
 	cube->setScale(glm::vec3(0));
 	m_pointMat = m_pc.materialManager->createMaterial();
 	m_pointMat->setColor(glm::vec3(0.0f, 0.0f, 1.0f));
 	m_pointMat->setMetallic(0.7f);
 	m_pointMat->setRoughness(0.15f);
 	m_pointMat->setPipeline(gp_unlit);
-
 }
 
 void BoneManager::fixedUpdate()
 {
 
+}
+
+bool isPointInsideBoundingBox(const glm::vec3& point, const glm::vec3 &min, const glm::vec3 &max) {
+	return (point.x >= min.x && point.x <= max.x &&
+		point.y >= min.y && point.y <= max.y &&
+		point.z >= min.z && point.z <= max.z);
+}
+
+std::vector<glm::vec3> BoneManager::getCloudPointBox(BoundingBox* bb) {
+	std::vector<glm::vec3> points;
+	if (m_modelCurrent != nullptr)
+	{
+		std::vector<Vertex> vertex = m_modelCurrent->getShapeBuffer()->getVertices();
+		glm::mat4 matrix = m_modelCurrent->getModelMatrix();
+		glm::vec3 n_pos;
+		glm::vec3 min_pos = bb->box->getPosition() - bb->box->getScale() / 2.0f;
+		glm::vec3 max_pos = bb->box->getPosition() + bb->box->getScale() / 2.0f;
+		for (size_t i = 0; i < vertex.size(); i++)
+		{
+			n_pos = (glm::vec4(vertex[i].pos, 1) * matrix);
+			if (isPointInsideBoundingBox(n_pos, min_pos, max_pos))
+			{
+				points.push_back(n_pos);
+			}
+		}
+	}
+	return points;
 }
 
 void BoneManager::update()
@@ -85,13 +118,62 @@ void BoneManager::update()
 		m_planeActive = false;
 		m_plane->setScale(m_planeShowHide ? glm::vec3(10.0f, 1.0f, 10.0f) : glm::vec3(0.0f));
 	}
+	if (m_modelCurrent)
+	{
+		m_modelCurrent->setScale(glm::vec3(m_sliderScale));
+		if (m_delete)
+		{
+			m_pc.modelManager->destroyModel(m_modelCurrent);
+			m_pc.modelManager->destroyBuffer(m_shapeCurrent);
+			m_pc.materialManager->destroyMaterial(m_matCurrent);
+			m_delete = false;
+			m_modelCurrent = nullptr;
+		}
+	}
 	if (m_create)
 	{
-		m_shapeCurrent = m_pc.modelManager->allocateBuffer(selectedItem == 0 ? "../Assets/spaghet.obj" : selectedItem == 1 ? "../Assets/MIddlePoly.obj" : "../Assets/UltraLowPoly.obj");
-		m_modelCurrent = m_pc.modelManager->createModel(m_shapeCurrent);
+		m_shapeCurrent = m_pc.modelManager->allocateBufferWire(selectedItem == 0 ? "../Assets/spaghet.obj" : selectedItem == 1 ? "../Assets/MIddlePoly.obj" : "../Assets/UltraLowPoly.obj");
+		m_modelCurrent = m_pc.modelManager->createModel(m_shapeCurrent);		
+		m_matCurrent = m_pc.materialManager->createMaterial();
+		m_matCurrent->setPipelineIndex(3);
+		m_modelCurrent->setMaterial(m_matCurrent);
 		m_create = false;
+		m_delete = false;
+	}	
+
+	if (m_create_box)
+	{
+		BoundingBox* new_box = new BoundingBox();
+		new_box->box = m_pc.modelManager->createModel(m_sb_wire);
+		new_box->box->setMaterial(box_material);
+		m_bb.push_back(new_box);
+		new_box->name = "Box" + std::to_string(m_bb.size());
+		m_pointListbb.push_back(new_box->name.c_str());
+		m_create_box = false;
 	}
 
+	if (m_delete_box)
+	{
+		BoundingBox* current_box = m_bb[m_selectedItemBB];
+		Debug::Log("%d", m_selectedItemBB);
+		m_pc.modelManager->destroyModel(m_bb[m_selectedItemBB]->box);
+		m_bb.erase(std::remove(m_bb.begin(), m_bb.end(), m_bb[m_selectedItemBB]), m_bb.end());
+
+		m_pointListbb.erase(m_pointListbb.begin() + m_selectedItemBB);
+		m_selectedItemBB = 0;
+		m_delete_box = false;
+	}
+	if (m_create_bone)
+	{
+		std::vector<glm::vec3> pointlist = getCloudPointBox(m_bb[m_selectedItemBB]);
+		for (size_t i = 0; i < pointlist.size(); i++)
+		{
+			Model* m = m_pc.modelManager->createModel(m_sb);
+			m->setScale(glm::vec3(0.05f));
+			m->setPosition(pointlist[i]);
+		}
+		m_create_bone = false;
+	}
 }
 
 void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
@@ -216,17 +298,34 @@ void BoneManager::render(VulkanMisc* vM)
 			m_planeActive = true;
 		}
 		ImGui::Combo("Model", &selectedItem, "Spaghet\0MIddlePoly\0UltraLowPoly\0");
-		if (ImGui::Button("Create"))
+		ImGui::DragFloat("Scale", &m_sliderScale,0.05f);
+		if (ImGui::Button("Create Mesh"))
 		{
-			m_create = true;			
+			m_create = true;		
+			m_delete = true;
+		}		
+		if (ImGui::Button("Delete Mesh"))
+		{
+			m_delete = true;
 		}
 		if (m_bb.size() > 0)
 		{
 			ImGui::ListBox("Liste de BoundingBox", &m_selectedItemBB, m_pointListbb.data(), m_pointListbb.size());
+			m_bb[m_selectedItemBB]->box->onGUI();
 		}
 		if (ImGui::Button("Create Box"))
 		{
-			m_pointListbb.push_back(std::to_string(m_bb.size()).c_str());
+			m_create_box = true;
+		}
+
+		if (ImGui::Button("Delete Box"))
+		{
+			m_delete_box = true;
+		}
+
+		if (ImGui::Button("Create Bone"))
+		{
+			m_create_bone = true;
 		}
 
 		ImGui::Spacing();
