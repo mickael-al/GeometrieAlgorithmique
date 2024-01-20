@@ -94,6 +94,99 @@ void BoneManager::update()
 
 }
 
+void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
+{
+	glm::vec3 bary;
+
+	for (int i = 0; i < cloud_point.size(); i++)
+	{
+		bary += cloud_point[i];
+	}
+	bary = bary / float(cloud_point.size());
+	for (int i = 0; i < cloud_point.size(); i++)
+	{
+		cloud_point[i] -= bary;
+	}
+
+	glm::mat3 covarMat = covarianceMatrix(cloud_point);
+
+	glm::vec3 properVec = cloud_point[0];
+	float maxDelta = glm::vec3(covarMat * cloud_point[0]).x/ cloud_point[0].x;
+
+	for (int i = 1; i < cloud_point.size(); i++)
+	{
+		float delta = glm::vec3(covarMat * cloud_point[i]).x / cloud_point[i].x;
+		if (delta > maxDelta)
+		{
+			maxDelta = delta;
+			properVec = cloud_point[i];
+		}
+	}
+
+	std::vector<glm::vec3> proj_point;
+	for (int i = 0; i < cloud_point.size(); i++)
+	{
+		proj_point.push_back(((cloud_point[i] * properVec) / (glm::abs(properVec) * glm::abs(properVec))) * properVec);
+	}
+
+	glm::vec3 BMin = glm::vec3(0);
+	glm::vec3 CMax = glm::vec3(0);
+	for (int i = 0; i < proj_point.size(); i++)
+	{
+		if (glm::dot(properVec, proj_point[i]) < 0)
+		{
+			if (glm::distance(proj_point[i], glm::vec3(0)) > glm::distance(BMin, glm::vec3(0)))
+			{
+				BMin = proj_point[i];
+			}
+		}
+		else
+		{
+			if (glm::distance(proj_point[i], glm::vec3(0)) > glm::distance(CMax, glm::vec3(0)))
+			{
+				CMax = proj_point[i];
+			}
+		}
+	}
+}
+
+glm::mat3 BoneManager::covarianceMatrix(std::vector<glm::vec3> cloud_point)
+{
+	float moyX = 0.0f, moyY = 0.0f, moyZ = 0.0f, varX = 0.0f, varY = 0.0f, varZ = 0.0f, coXY = 0.0f, coXZ = 0.0f, coYZ = 0.0f;
+	for (int i = 0; i < cloud_point.size(); i++)
+	{
+		moyX += cloud_point[i].x;
+		moyY += cloud_point[i].y;
+		moyZ += cloud_point[i].z;
+	}
+	moyX /= cloud_point.size();
+	moyY /= cloud_point.size();
+	moyZ /= cloud_point.size();
+
+	for (int i = 0; i < cloud_point.size(); i++)
+	{
+		varX += std::pow(cloud_point[i].x - moyX, 2);
+		varY += std::pow(cloud_point[i].y - moyY, 2);
+		varZ += std::pow(cloud_point[i].z - moyZ, 2);
+		coXY += (cloud_point[i].x - moyX) * (cloud_point[i].y - moyY);
+		coXZ += (cloud_point[i].y - moyY) * (cloud_point[i].z - moyZ);
+		coYZ += (cloud_point[i].x - moyX) * (cloud_point[i].z - moyZ);
+	}
+	varX /= cloud_point.size();
+	varY /= cloud_point.size();
+	varZ /= cloud_point.size();
+
+	coXY /= cloud_point.size();
+	coXZ /= cloud_point.size();
+	coYZ /= cloud_point.size();
+
+	return glm::mat3(varX, coXY, coXZ,
+					 coXY, varY, coYZ,
+					 coXZ, coYZ, varZ);
+}
+
+
+
 void BoneManager::stop()
 {
 

@@ -26,6 +26,8 @@ public:
 	void render(VulkanMisc* vM);
 	glm::vec3 directionToRotation(glm::vec3 direction);
 	Model* createSegment3D(glm::vec3 p1, glm::vec3 p2, Materials* mat = nullptr);
+	void createBones(std::vector<glm::vec3> cloud_point);
+	glm::mat3 covarianceMatrix(std::vector<glm::vec3> cloud_point);
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
