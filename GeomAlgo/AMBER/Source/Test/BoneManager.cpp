@@ -177,6 +177,27 @@ void BoneManager::update()
 	}
 }
 
+glm::vec3 powerIteration(const glm::mat3& covarMat)
+{
+	glm::vec3 properVector = glm::vec3(1.0f, 0.0f, 0.0f);
+	float error = 1.0f;
+	const float tolerance = 1e-6;
+	int max_iter = 200;
+	float lambda = 0.0f;
+	int iter = 0;
+	while (error > tolerance && iter < max_iter)
+	{
+		glm::vec3 y = covarMat * properVector;
+		glm::vec3 z = glm::normalize(y);
+		lambda = glm::dot(y, z);
+		error = glm::length(properVector - z);
+		properVector = z;
+		iter++;
+	}
+
+	return properVector;
+}
+
 void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 {
 	glm::vec3 bary = glm::vec3(0);
@@ -191,63 +212,32 @@ void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 		cloud_point[i] -= bary;
 	}
 
-
 	glm::mat3 covarMat = covarianceMatrix(cloud_point);
 
-	glm::vec3 properVec = cloud_point[0];
-	float maxLambda = glm::abs(glm::vec3(covarMat * cloud_point[0]).x);
-	glm::vec3 lambda2;
-	glm::vec3 maxlambda2;
+	glm::vec3 properVec = glm::normalize(powerIteration(covarMat));
+
+	glm::vec3 BMin = glm::dot(cloud_point[0], properVec) * properVec;
+	glm::vec3 CMax = BMin;
 	for (int i = 1; i < cloud_point.size(); i++)
 	{
-		float lambda = glm::abs(glm::vec3(covarMat * cloud_point[i]).x);
-		if (lambda > maxLambda)
+		glm::vec3 pp = glm::dot(cloud_point[i], properVec) * properVec;
+		if (glm::dot(pp, properVec) < 0)
 		{
-			maxLambda = lambda;
-			maxlambda2 = glm::vec3(covarMat * cloud_point[i]);
-			properVec = cloud_point[i];
-		}
-	}
-	lambda2 = glm::vec3(covarMat * cloud_point[0]);
-	for (int i = 0; i < cloud_point.size()-1; i++)
-	{
-		lambda2 = ((1.0f / maxLambda) * covarMat * lambda2);
-	}
-	m_segments.push_back(createSegment3D(bary - properVec*1000.0f, bary+ properVec*1000.0f, m_pointMat));
-
-	/*std::vector<glm::vec3> proj_point;
-	for (int i = 0; i < cloud_point.size(); i++)
-	{
-		proj_point.push_back(((cloud_point[i] * properVec) / (glm::abs(properVec) * glm::abs(properVec))) * properVec);
-	}
-
-	glm::vec3 BMin = glm::vec3(0);
-	glm::vec3 CMax = glm::vec3(0);
-	for (int i = 0; i < proj_point.size(); i++)
-	{
-		if (glm::dot(properVec, proj_point[i]) < 0)
-		{
-			if (glm::distance(proj_point[i], glm::vec3(0)) > glm::distance(BMin, glm::vec3(0)))
+			if (glm::distance(BMin, glm::vec3(0)) < glm::distance(pp, glm::vec3(0)))
 			{
-				BMin = proj_point[i];
+				BMin = pp;
 			}
 		}
 		else
 		{
-			if (glm::distance(proj_point[i], glm::vec3(0)) > glm::distance(CMax, glm::vec3(0)))
+			if (glm::distance(CMax, glm::vec3(0)) < glm::distance(pp, glm::vec3(0)))
 			{
-				CMax = proj_point[i];
+				CMax = pp;
 			}
 		}
 	}
 
-	BMin += bary;
-	CMax += bary;
-
-
-
-	m_segments.push_back(createSegment3D(BMin, CMax, m_pointMat));*/
-
+	m_segments.push_back(createSegment3D(BMin+ bary, CMax+ bary, m_pointMat));
 }
 
 glm::mat3 BoneManager::covarianceMatrix(std::vector<glm::vec3> cloud_point)
