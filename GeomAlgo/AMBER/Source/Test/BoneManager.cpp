@@ -75,6 +75,10 @@ void BoneManager::start()
 	m_segmentMat->setMetallic(0.7f);
 	m_segmentMat->setRoughness(0.15f);
 	m_segmentMat->setPipeline(gp_unlit);
+
+	GraphiquePipeline* gp_bone = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag.spv", "../Shader/shader_bone_vs.spv");
+	m_bone = m_pc.materialManager->createMaterial();
+	m_segmentMat->setPipeline(gp_bone);
 }
 
 void BoneManager::fixedUpdate()

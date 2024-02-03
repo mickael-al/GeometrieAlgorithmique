@@ -6,13 +6,7 @@
 #include "GameEngine.hpp"
 #include <string>
 #include <vector>
-
-struct BoundingBox
-{
-	Model* box;
-	Materials* material;
-	std::string name;
-};
+#include "BoundingBox.hpp"
 
 class BoneManager : public ImguiBlock, public Behaviour
 {
@@ -60,6 +54,7 @@ private:
 	ShapeBuffer* m_shapeCurrent = nullptr;
 	ShapeBuffer* m_sb = nullptr;
 	ShapeBuffer* m_sb_wire = nullptr;
+	Materials* m_bone = nullptr;
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;
 	Model* m_plane;
