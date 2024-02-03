@@ -69,6 +69,12 @@ void BoneManager::start()
 	m_pointMat->setMetallic(0.7f);
 	m_pointMat->setRoughness(0.15f);
 	m_pointMat->setPipeline(gp_unlit);
+
+	m_segmentMat = m_pc.materialManager->createMaterial();
+	m_segmentMat->setColor(glm::vec3(1.0f, 0.0f, 0.0f));
+	m_segmentMat->setMetallic(0.7f);
+	m_segmentMat->setRoughness(0.15f);
+	m_segmentMat->setPipeline(gp_unlit);
 }
 
 void BoneManager::fixedUpdate()
@@ -166,19 +172,14 @@ void BoneManager::update()
 	if (m_create_bone)
 	{
 		std::vector<glm::vec3> pointlist = getCloudPointBox(m_bb[m_selectedItemBB]);
-		for (size_t i = 0; i < pointlist.size(); i++)
-		{
-			Model* m = m_pc.modelManager->createModel(m_sb);
-			m->setScale(glm::vec3(0.05f));
-			m->setPosition(pointlist[i]);
-		}
+		createBones(pointlist);
 		m_create_bone = false;
 	}
 }
 
 void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 {
-	glm::vec3 bary;
+	glm::vec3 bary = glm::vec3(0);
 
 	for (int i = 0; i < cloud_point.size(); i++)
 	{
@@ -190,22 +191,31 @@ void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 		cloud_point[i] -= bary;
 	}
 
+
 	glm::mat3 covarMat = covarianceMatrix(cloud_point);
 
 	glm::vec3 properVec = cloud_point[0];
-	float maxDelta = glm::vec3(covarMat * cloud_point[0]).x/ cloud_point[0].x;
-
+	float maxLambda = glm::abs(glm::vec3(covarMat * cloud_point[0]).x);
+	glm::vec3 lambda2;
+	glm::vec3 maxlambda2;
 	for (int i = 1; i < cloud_point.size(); i++)
 	{
-		float delta = glm::vec3(covarMat * cloud_point[i]).x / cloud_point[i].x;
-		if (delta > maxDelta)
+		float lambda = glm::abs(glm::vec3(covarMat * cloud_point[i]).x);
+		if (lambda > maxLambda)
 		{
-			maxDelta = delta;
+			maxLambda = lambda;
+			maxlambda2 = glm::vec3(covarMat * cloud_point[i]);
 			properVec = cloud_point[i];
 		}
 	}
+	lambda2 = glm::vec3(covarMat * cloud_point[0]);
+	for (int i = 0; i < cloud_point.size()-1; i++)
+	{
+		lambda2 = ((1.0f / maxLambda) * covarMat * lambda2);
+	}
+	m_segments.push_back(createSegment3D(bary - properVec*1000.0f, bary+ properVec*1000.0f, m_pointMat));
 
-	std::vector<glm::vec3> proj_point;
+	/*std::vector<glm::vec3> proj_point;
 	for (int i = 0; i < cloud_point.size(); i++)
 	{
 		proj_point.push_back(((cloud_point[i] * properVec) / (glm::abs(properVec) * glm::abs(properVec))) * properVec);
@@ -230,6 +240,14 @@ void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 			}
 		}
 	}
+
+	BMin += bary;
+	CMax += bary;
+
+
+
+	m_segments.push_back(createSegment3D(BMin, CMax, m_pointMat));*/
+
 }
 
 glm::mat3 BoneManager::covarianceMatrix(std::vector<glm::vec3> cloud_point)

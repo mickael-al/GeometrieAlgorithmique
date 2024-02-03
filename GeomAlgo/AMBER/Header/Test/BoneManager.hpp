@@ -63,6 +63,7 @@ private:
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;
 	Model* m_plane;
+	std::vector<Model*> m_segments;
 };
 
 #endif//!__BONE_MANAGER__
