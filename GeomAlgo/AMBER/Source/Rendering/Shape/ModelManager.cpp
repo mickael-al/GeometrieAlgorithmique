@@ -685,6 +685,75 @@ namespace Ge
 			point.z >= min.z && point.z <= max.z);
 	}
 
+	void ModelManager::createRoot(BoneNode * bn,ShapeBuffer* emptyShape)
+	{
+		glm::vec3 center = (bn->A + bn->B) / 2.0f;		
+		for (int i = 0; i < bn->child.size(); i++)
+		{
+			glm::vec3 fp = glm::distance(bn->child[i]->A, center) > glm::distance(bn->child[i]->B, center) ? bn->child[i]->B : bn->child[i]->A;
+			bn->child[i]->root_vertex = createModel(emptyShape);
+			bn->child[i]->root_vertex->setPosition(fp);
+			bn->child[i]->position = fp;
+			createRoot(bn->child[i], emptyShape);
+		}
+	}
+
+	bool insideBox(BoundingBox* bb, glm::vec3 pos, glm::mat4 matrix)
+	{						
+			glm::vec3 n_pos;
+			glm::vec3 min_pos = bb->box->getPosition() - bb->box->getScale() / 2.0f;
+			glm::vec3 max_pos = bb->box->getPosition() + bb->box->getScale() / 2.0f;
+			n_pos = (glm::vec4(pos, 1) * matrix);
+			if (isPointInsideBoundingBox(n_pos, min_pos, max_pos))
+			{
+				return true;
+			}
+			return false;
+	}
+
+	ShapeBuffer* ModelManager::allocateBufferRig(Model * currentmesh, ShapeBuffer *emptyShape, std::vector<BoneNode*> bones,Model ** m)
+	{
+		BoneNode* first_parent = nullptr;
+		for (int i = 0; i < bones.size(); i++)
+		{
+			if (bones[i]->parent)
+			{
+				if (first_parent == nullptr)
+				{
+					first_parent = bones[i];
+				}
+				bones[i]->root_vertex = createModel(emptyShape);
+				bones[i]->root_vertex->setPosition(glm::vec3(0,0,0));
+				bones[i]->position = glm::vec3(0, 0, 0);
+				createRoot(bones[i], emptyShape);
+			}
+		}
+		std::vector<Vertex> v = std::vector<Vertex>(currentmesh->getShapeBuffer()->getVertices());
+		std::vector<uint32_t> c = std::vector<uint32_t>(currentmesh->getShapeBuffer()->getIndices());
+
+		for (int i = 0; i < v.size(); i++)
+		{
+			bool find = false;
+			for (int j = 0; j < bones.size() && !find; j++)
+			{
+				if (insideBox(bones[j]->bb, v[i].pos, currentmesh->getModelMatrix()))
+				{
+					find = true;
+					v[i].color.x = bones[j]->root_vertex->getPushConstants().ubo;
+				}				
+			}
+			if (!find && first_parent != nullptr)
+			{
+				v[i].color.x = first_parent->root_vertex->getPushConstants().ubo;
+			}
+		}
+
+		ShapeBuffer* buffer = new ShapeBuffer(v, c, vulkanM);
+		*m = createModel(buffer);
+		m_shapeBuffers.push_back(buffer);
+		return buffer;
+	}
+
 	ShapeBuffer * ModelManager::allocateBufferBone(const char* path, std::unordered_map<BoundingBox*, int> m_map, bool normal_recalculate)
 	{
 		tinyobj::attrib_t attrib;

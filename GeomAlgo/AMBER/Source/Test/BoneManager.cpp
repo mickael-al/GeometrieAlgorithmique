@@ -57,10 +57,13 @@ void BoneManager::start()
 
 	GraphiquePipeline * gp_unlit = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag_unlit.spv", "../Shader/vert_unlit.spv");
 	GraphiquePipeline * gp_wire = m_pc.graphiquePipelineManager->createPipeline("../Shader/shader_wireframe_fs.spv", "../Shader/vert.spv");
-	GraphiquePipeline* gp_box = m_pc.graphiquePipelineManager->createPipeline("../Shader/box_visualizer.spv", "../Shader/vert.spv", false, true, false, 0);
-	
+	GraphiquePipeline * gp_box = m_pc.graphiquePipelineManager->createPipeline("../Shader/box_visualizer.spv", "../Shader/vert.spv", false, true, false, 0);
+	GraphiquePipeline* gp_rig = m_pc.graphiquePipelineManager->createPipeline("../Shader/frag.spv", "../Shader/shader_bone_vs.spv");
 	box_material = m_pc.materialManager->createMaterial();
 	box_material->setPipeline(gp_box);
+	m_se = m_pc.modelManager->allocateBuffer("../Model/a.obj");
+	m_matrig = m_pc.materialManager->createMaterial();
+	m_matrig->setPipeline(gp_rig);
 
 	Model * cube = m_pc.modelManager->createModel(m_sb);
 	cube->setScale(glm::vec3(0));
@@ -86,7 +89,8 @@ void BoneManager::fixedUpdate()
 
 }
 
-bool isPointInsideBoundingBox(const glm::vec3& point, const glm::vec3 &min, const glm::vec3 &max) {
+bool isPointInsideBoundingBox(const glm::vec3& point, const glm::vec3 &min, const glm::vec3 &max) 
+{
 	return (point.x >= min.x && point.x <= max.x &&
 		point.y >= min.y && point.y <= max.y &&
 		point.z >= min.z && point.z <= max.z);
@@ -111,6 +115,16 @@ std::vector<glm::vec3> BoneManager::getCloudPointBox(BoundingBox* bb) {
 		}
 	}
 	return points;
+}
+
+void updateRig(BoneNode * bn)
+{
+	for (int i = 0; i < bn->child.size(); i++)
+	{
+		bn->child[i]->root_vertex->setPosition(bn->root_vertex->getModelMatrix() * glm::vec4(bn->child[i]->position,1.0f));
+		bn->child[i]->root_vertex->setRotation(glm::quat_cast(bn->root_vertex->getModelMatrix() * glm::mat4_cast(glm::quat(glm::radians(bn->child[i]->eulerAngle)))));
+		updateRig(bn->child[i]);
+	}
 }
 
 void BoneManager::update()
@@ -179,6 +193,23 @@ void BoneManager::update()
 		createBones(pointlist);
 		m_create_bone = false;
 	}
+
+	if (m_rigging)
+	{
+		m_pc.modelManager->allocateBufferRig(m_modelCurrent, m_se, m_bones, &m_modelRigged);
+		m_modelRigged->setMaterial(m_matrig);
+		m_rigging = false;
+	}
+	if (m_modelRigged != nullptr)
+	{
+		for (int i = 0; i < m_bones.size(); i++)
+		{
+			if (m_bones[i]->parent)
+			{
+				updateRig(m_bones[i]);
+			}
+		}
+	}
 }
 
 glm::vec3 powerIteration(const glm::mat3& covarMat)
@@ -241,7 +272,18 @@ void BoneManager::createBones(std::vector<glm::vec3> cloud_point)
 		}
 	}
 
-	m_segments.push_back(createSegment3D(BMin+ bary, CMax+ bary, m_pointMat));
+	createBoneNode(BMin+ bary, CMax+ bary);
+}
+
+void BoneManager::createBoneNode(glm::vec3 A, glm::vec3 B)
+{
+	BoneNode* bn = new BoneNode();
+	bn->segments = createSegment3D(A, B, m_pointMat);
+	bn->name = new std::string("bone_" + std::to_string(m_bones.size()));	
+	bn->bb = m_bb[m_selectedItemBB];
+	bn->A = A;
+	bn->B = B;	
+	m_bones.push_back(bn);
 }
 
 glm::mat3 BoneManager::covarianceMatrix(std::vector<glm::vec3> cloud_point)
@@ -289,6 +331,29 @@ void BoneManager::stop()
 void BoneManager::preRender(VulkanMisc* vM)
 {
 
+}
+
+void drawRecurseTreeNode(BoneNode * bn)
+{		
+	if (ImGui::TreeNode(bn->name->c_str()))
+	{
+		if (bn->root_vertex != nullptr)
+		{
+			if (ImGui::DragFloat3("Position", (float*)&bn->position, 0.2f))
+			{
+			}
+
+			if (ImGui::DragFloat3("EulerAngles", (float*)&bn->eulerAngle, 0.2f))
+			{
+				
+			}
+		}
+		for (int i = 0; i < bn->child.size(); i++)
+		{
+			drawRecurseTreeNode(bn->child[i]);
+		}
+		ImGui::TreePop();
+	}
 }
 
 void BoneManager::render(VulkanMisc* vM)
@@ -341,6 +406,42 @@ void BoneManager::render(VulkanMisc* vM)
 		}
 
 		ImGui::Spacing();
+		ImGui::Text("Hierarchy");
+		ImGui::DragInt("Child Id", &child_id);
+		ImGui::SameLine();
+		ImGui::DragInt("Parent Id", &parent_id);		
+		if (ImGui::Button("link"))
+		{
+			if (child_id != parent_id && child_id < m_bones.size() && parent_id < m_bones.size())
+			{				
+				if (std::find(m_bones[parent_id]->child.begin(), m_bones[parent_id]->child.end(), m_bones[child_id]) == m_bones[parent_id]->child.end())
+				{
+					m_bones[parent_id]->child.push_back(m_bones[child_id]);
+					m_bones[child_id]->parent = false;					
+				}
+			}
+		}
+
+		ImGui::Spacing();
+		if (ImGui::Button("Rigging"))
+		{
+			m_rigging = true;
+		}
+	}
+	ImGui::End();
+	if (ImGui::Begin("Bones"))
+	{
+		if (ImGui::TreeNode("Bones hierarchy"))
+		{
+			for (int i = 0; i < m_bones.size(); i++)
+			{
+				if (m_bones[i]->parent)
+				{
+					drawRecurseTreeNode(m_bones[i]);
+				}
+			}
+			ImGui::TreePop();
+		}
 	}
 	ImGui::End();
 }

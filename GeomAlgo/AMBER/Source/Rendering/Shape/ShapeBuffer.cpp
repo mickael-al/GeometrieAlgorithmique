@@ -66,4 +66,9 @@ namespace Ge
 	{
 		return m_vertices;
 	}
+
+	const std::vector<uint32_t>& ShapeBuffer::getIndices() const
+	{
+		return m_indices;
+	}
 }

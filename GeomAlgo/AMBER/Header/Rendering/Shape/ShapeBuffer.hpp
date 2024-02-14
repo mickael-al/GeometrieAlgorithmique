@@ -17,6 +17,7 @@ namespace Ge
 		const VkBuffer * getVertexBuffer() const;
 		VkDeviceSize getDeviceSize() const;
 		const std::vector<Vertex> & getVertices() const;
+		const std::vector<uint32_t>& getIndices() const;
 		uint32_t getIndiceSize() const;
 	private:
 		virtual void construct(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, VulkanMisc* vM);

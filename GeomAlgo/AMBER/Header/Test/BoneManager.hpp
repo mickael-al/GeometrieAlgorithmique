@@ -24,6 +24,7 @@ public:
 	Model* createSegment3D(glm::vec3 p1, glm::vec3 p2, Materials* mat = nullptr);
 	void createBones(std::vector<glm::vec3> cloud_point);
 	glm::mat3 covarianceMatrix(std::vector<glm::vec3> cloud_point);
+	void createBoneNode(glm::vec3 A, glm::vec3 B);
 private:
 	ptrClass m_pc;
 	Camera* m_cam2D;
@@ -40,6 +41,7 @@ private:
 	bool m_delete_box = false;
 	bool m_create_bone = false;
 	bool m_delete = false;
+	bool m_rigging = false;
 	float m_size = 0.05f;
 	int selectedItem = 0;
 
@@ -51,14 +53,19 @@ private:
 	float m_sliderScale = 1.0f;
 	Model* m_modelCurrent = nullptr;
 	Materials * m_matCurrent = nullptr;
+	Materials* m_matrig = nullptr;
 	ShapeBuffer* m_shapeCurrent = nullptr;
 	ShapeBuffer* m_sb = nullptr;
 	ShapeBuffer* m_sb_wire = nullptr;
+	ShapeBuffer* m_se = nullptr;
 	Materials* m_bone = nullptr;
 	Materials* m_pointMat = nullptr;
 	Materials* m_segmentMat = nullptr;
 	Model* m_plane;
-	std::vector<Model*> m_segments;
+	Model* m_modelRigged = nullptr;
+	std::vector<BoneNode*> m_bones;
+	int child_id = 0;
+	int parent_id = 0;
 };
 
 #endif//!__BONE_MANAGER__

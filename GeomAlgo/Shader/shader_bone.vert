@@ -81,13 +81,18 @@ layout(location = 6) out int imaterial;
 void main() 
 {
 	fragTexCoord = ubm[index_material].offset +inTexCoord * ubm[index_material].tilling;
-	WorldPos = vec3(ubo[int(inColor.x)].model * vec4(inPosition, 1.0));
+	vec4 np = ubo[index_ubo].model * vec4(inPosition, 1.0);
+	vec3 localpos = ubo[int(inColor.x)].model[3].xyz;
+	//np.xyz -= localpos;
+	//np = ubo[int(inColor.x)].model * np;
+
+	WorldPos = np.xyz;
 	Color = inColor;
-	vec3 T = normalize(vec3(ubo[int(inColor.x)].model * vec4(inTangent, 0.0)));
-	vec3 N = normalize(vec3(ubo[int(inColor.x)].model * vec4(inNormal, 0.0)));	
+	vec3 T = normalize(vec3(ubo[index_ubo].model * ubo[int(inColor.x)].model * vec4(inTangent, 0.0)));
+	vec3 N = normalize(vec3(ubo[index_ubo].model * ubo[int(inColor.x)].model * vec4(inNormal, 0.0)));	
 	T = normalize(T - dot(T, N) * N);
 	vec3 B = cross(N, T);
 	TBN = mat3(T, B, N);
 	imaterial = index_material;
-    gl_Position = ubc.proj * ubc.view * ubo[int(inColor.x)].model * vec4(inPosition, 1.0);
+    gl_Position = ubc.proj * ubc.view * np;
 }
