@@ -82,9 +82,15 @@ void main()
 {
 	fragTexCoord = ubm[index_material].offset +inTexCoord * ubm[index_material].tilling;
 	vec4 np = ubo[index_ubo].model * vec4(inPosition, 1.0);
+	
 	vec3 localpos = ubo[int(inColor.x)].model[3].xyz;
-	//np.xyz -= localpos;
-	//np = ubo[int(inColor.x)].model * np;
+	np.xyz -= localpos;
+	np = ubo[int(inColor.x)].model * np;
+	int p = int(inColor.y);
+	if(p != -1)
+	{
+		np = ubo[p].model * np;
+	}
 
 	WorldPos = np.xyz;
 	Color = inColor;

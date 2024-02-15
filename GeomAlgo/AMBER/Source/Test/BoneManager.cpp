@@ -117,16 +117,6 @@ std::vector<glm::vec3> BoneManager::getCloudPointBox(BoundingBox* bb) {
 	return points;
 }
 
-void updateRig(BoneNode * bn)
-{
-	for (int i = 0; i < bn->child.size(); i++)
-	{
-		bn->child[i]->root_vertex->setPosition(bn->root_vertex->getModelMatrix() * glm::vec4(bn->child[i]->position,1.0f));
-		bn->child[i]->root_vertex->setRotation(glm::quat_cast(bn->root_vertex->getModelMatrix() * glm::mat4_cast(glm::quat(glm::radians(bn->child[i]->eulerAngle)))));
-		updateRig(bn->child[i]);
-	}
-}
-
 void BoneManager::update()
 {
 	if (m_cameraChange)
@@ -198,17 +188,8 @@ void BoneManager::update()
 	{
 		m_pc.modelManager->allocateBufferRig(m_modelCurrent, m_se, m_bones, &m_modelRigged);
 		m_modelRigged->setMaterial(m_matrig);
+		m_modelRigged->setScale(glm::vec3(m_sliderScale, m_sliderScale, m_sliderScale));
 		m_rigging = false;
-	}
-	if (m_modelRigged != nullptr)
-	{
-		for (int i = 0; i < m_bones.size(); i++)
-		{
-			if (m_bones[i]->parent)
-			{
-				updateRig(m_bones[i]);
-			}
-		}
 	}
 }
 
@@ -339,14 +320,7 @@ void drawRecurseTreeNode(BoneNode * bn)
 	{
 		if (bn->root_vertex != nullptr)
 		{
-			if (ImGui::DragFloat3("Position", (float*)&bn->position, 0.2f))
-			{
-			}
-
-			if (ImGui::DragFloat3("EulerAngles", (float*)&bn->eulerAngle, 0.2f))
-			{
-				
-			}
+			bn->root_vertex->onGUI();			
 		}
 		for (int i = 0; i < bn->child.size(); i++)
 		{

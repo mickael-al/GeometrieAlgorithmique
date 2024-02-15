@@ -740,11 +740,20 @@ namespace Ge
 				{
 					find = true;
 					v[i].color.x = bones[j]->root_vertex->getPushConstants().ubo;
+					v[i].color.y = -1;
+					for (int k = 0; k < bones.size(); k++)
+					{
+						if (k != j && std::find(bones[k]->child.begin(), bones[k]->child.end(), bones[j]) != bones[k]->child.end())
+						{
+							v[i].color.y = bones[k]->root_vertex->getPushConstants().ubo;
+						}
+					}
 				}				
 			}
 			if (!find && first_parent != nullptr)
 			{
 				v[i].color.x = first_parent->root_vertex->getPushConstants().ubo;
+				v[i].color.y = -1.0;
 			}
 		}
 
