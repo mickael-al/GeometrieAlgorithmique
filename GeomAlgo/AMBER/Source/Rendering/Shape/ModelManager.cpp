@@ -741,11 +741,19 @@ namespace Ge
 					find = true;
 					v[i].color.x = bones[j]->root_vertex->getPushConstants().ubo;
 					v[i].color.y = -1;
-					for (int k = 0; k < bones.size(); k++)
+					v[i].color.z = -1;
+					for (int k = 0; k < bones.size() && v[i].color.y == -1; k++)
 					{
 						if (k != j && std::find(bones[k]->child.begin(), bones[k]->child.end(), bones[j]) != bones[k]->child.end())
 						{
 							v[i].color.y = bones[k]->root_vertex->getPushConstants().ubo;
+							for (int l = 0; l < bones.size() && v[i].color.z == -1; l++)
+							{
+								if (l != k && std::find(bones[l]->child.begin(), bones[l]->child.end(), bones[k]) != bones[l]->child.end())
+								{
+									v[i].color.z = bones[l]->root_vertex->getPushConstants().ubo;
+								}
+							}
 						}
 					}
 				}				
@@ -754,6 +762,7 @@ namespace Ge
 			{
 				v[i].color.x = first_parent->root_vertex->getPushConstants().ubo;
 				v[i].color.y = -1.0;
+				v[i].color.z = -1.0;
 			}
 		}
 

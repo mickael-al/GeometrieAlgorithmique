@@ -87,9 +87,17 @@ void main()
 	np.xyz -= localpos;
 	np = ubo[int(inColor.x)].model * np;
 	int p = int(inColor.y);
-	if(p != -1)
+	int d = int(inColor.z);
+	if(p != -1 && d == -1)
 	{
 		np = ubo[p].model * np;
+	}
+	else if(p != -1 && d != 1)
+	{
+		vec3 nlp = ubo[p].model[3].xyz;
+		np.xyz -= nlp;
+		np = ubo[p].model * np;
+		np = ubo[d].model * np;
 	}
 
 	WorldPos = np.xyz;
